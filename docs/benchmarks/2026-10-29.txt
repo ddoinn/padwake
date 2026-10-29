@@ -1,0 +1,89 @@
+Padwake v0.1.0 / Windows 11 / Ryzen 5 3500U / 8 logical processors / 1080p 60 Hz / 150% scaling
+
+Home idle
+
+
+  pid name             cpuMs pctOfPC
+  --- ----             ----- -------
+10336 padwake          187.5  0.0383
+10464 msedgewebview2 109.375  0.0224
+ 8896 msedgewebview2  46.875  0.0096
+ 3432 msedgewebview2   31.25  0.0064
+11196 msedgewebview2   31.25  0.0064
+10352 msedgewebview2       0       0
+10160 msedgewebview2       0       0
+ 3400 msedgewebview2       0       0
+ 5260 padwake              0       0
+
+
+
+9 processes over 61.1 s: CPU 406.3 ms = 0.0830% of the PC (8 logical cores) = 0.664% of one core; GPU avg 0.006% max 0.341% (60 samples)
+
+
+Keyboard response
+
+
+ n key     ms notYetMs grabs
+ - ---     -- -------- -----
+ 1 Right   68     49.6     3
+ 2 Left  29.5     10.9     2
+ 3 Right 21.5        0     1
+ 4 Left  26.7     10.1     2
+ 5 Right 30.9       16     2
+ 6 Left  27.1      9.8     2
+ 7 Right 30.5     18.3     2
+ 8 Left  33.7     16.1     2
+ 9 Right 31.7     15.2     2
+10 Left  31.9     16.7     2
+11 Right 33.6     17.3     2
+12 Left  33.9     16.9     2
+13 Right   30     18.7     2
+14 Left  21.7      5.4     2
+15 Right 30.3     15.8     2
+16 Left  22.8        6     2
+17 Right 29.1     10.4     2
+18 Left  20.6        0     1
+19 Right 24.3      7.3     2
+20 Left  20.7        0     1
+
+
+
+key -> first moving frame (random phase): median 29.75 ms over 20 samples (min 20.6, max 68); 0 missed. The row was still on the grab before: median 13.05 ms
+
+
+Game return
+
+'Stand-in Long' is tile 1 of 13 in W:\tmp\padwake-demo-data
+W:\tmp\padwake-readme-return\return-focus.png 1920x1080, foreground: 'Padwake'
+
+n visibleMs drawnMs answeredMs
+- --------- ------- ----------
+1      85.8   285.4      316.4
+2        91   251.6      282.6
+3      85.1   251.6      282.8
+4      84.1   285.1      316.6
+5      84.7   282.3      315.9
+
+
+
+game exit (WM_CLOSE) -> visible median 85.1 ms, row drawn median 282.3 ms, answered a key median 315.9 ms (max 316.6) over 5 samples
+
+
+App resources while the stand-in runs
+
+
+  pid name             cpuMs pctOfPC
+  --- ----             ----- -------
+10336 padwake        109.375  0.0224
+10464 msedgewebview2   93.75  0.0192
+11196 msedgewebview2  78.125   0.016
+ 8896 msedgewebview2       0       0
+10352 msedgewebview2       0       0
+ 5260 padwake              0       0
+ 3432 msedgewebview2       0       0
+10160 msedgewebview2       0       0
+ 3400 msedgewebview2       0       0
+
+
+
+9 processes over 61.1 s: CPU 281.3 ms = 0.0576% of the PC (8 logical cores) = 0.460% of one core; GPU avg 0.000% max 0.000% (60 samples)

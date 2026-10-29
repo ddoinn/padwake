@@ -1,0 +1,17 @@
+[
+  {"eval": "__app.push('settings').then(() => __app.stack.map(s => s.id).join(','))"},
+  {"wait": 900},
+  {"key": "ArrowDown"}, {"wait": 300}, {"key": "Enter"}, {"wait": 1200},
+  {"key": "ArrowRight"}, {"wait": 600}, {"key": "Enter"}, {"wait": 600},
+  {"assert": "__app.stack.map(s => s.id).join(',') === 'home,settings' && !!document.querySelector('#screen-settings .dd')",
+   "why": "Sound's Output Device dropdown is open, with Home drawn below Settings as in the real app"},
+  {"assert": "getComputedStyle(document.querySelector('#screen-settings')).backgroundColor === 'rgb(0, 0, 0)'",
+   "why": "Settings is opaque under its dimmed background, so Home doesn't show through the dropdown dim"},
+  {"shot": "settings-dropdown-over-home"},
+  {"key": "Escape"}, {"wait": 400}, {"key": "Escape"}, {"wait": 400}, {"key": "Escape"}, {"wait": 800},
+  {"key": "ArrowDown"}, {"key": "ArrowDown"}, {"key": "ArrowDown"}, {"key": "ArrowDown"}, {"wait": 300}, {"key": "Enter"}, {"wait": 1200},
+  {"key": "Enter"}, {"wait": 500},
+  {"assert": "document.querySelector('#screen-settings').classList.contains('dlg')", "why": "Power's Sleep question is open over Home"},
+  {"shot": "settings-dialog-over-home"},
+  {"key": "Escape"}
+]

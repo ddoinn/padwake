@@ -1,0 +1,211 @@
+/* Home (design/ps5/1-home.md §1.3–1.5). Positions are the measured 1920×1080 numbers; text boxes are placed so the
+   ink lands on the measured cap lines (Open Sans: ascent 1.069 em, descent .293 em, cap .714 em). */
+
+#screen-home .bgwrap, #screen-home .bg, #screen-home .bg .layer, #screen-home .dim, #screen-home .navy, #screen-home .ui,
+#screen-home .content, #screen-home .herowrap, #screen-home .hero { position: absolute; inset: 0; }
+#screen-home .bg { z-index: 0; } /* its layers swap z-index inside it */
+#screen-home .bg .layer img { display: block; width: 100%; height: 100%; object-fit: cover; }
+#screen-home .dim { background: #000; opacity: 0; }  /* hub cards: the art drops to ≈35 % */
+/* The PS5's key art is made dark on the left and top, so its text reads (§1.3: the left 40 % near #000006). Store art
+   isn't, so a fixed scrim does that job: static, no cost while idle. */
+#screen-home .scrim {
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, rgba(0, 0, 0, .62) 0%, rgba(0, 0, 0, .5) 30%, rgba(0, 0, 0, .12) 58%, rgba(0, 0, 0, 0) 72%),
+    linear-gradient(180deg, rgba(0, 0, 0, .4) 0, rgba(0, 0, 0, 0) 330px);
+}
+/* game launch (§1.10): navy radial, #0F1731 at the centre and bottom-centre, darker left, near-black at the edges */
+#screen-home .navy {
+  opacity: 0;
+  background: radial-gradient(1000px 800px at 1010px 900px, #0f1731 0%, #0f1731 45%, #0e152d 62%, #050c22 72%, #00000a 100%);
+}
+#screen-home .top, #screen-home .rowwrap, #screen-home .hubhead, #screen-home .cards { position: absolute; inset: 0; }
+/* .001, not 0: invisible, but painted ahead, so Down never waits to paint them */
+#screen-home .hubhead, #screen-home .cards { opacity: .001; }
+/* layers made up front, so a hub move or a fade never waits for new layers to be cut and painted */
+#screen-home .content, #screen-home .cards .strip { will-change: transform; }
+#screen-home .top, #screen-home .rowwrap, #screen-home .hubhead, #screen-home .cards, #screen-home .herowrap, #screen-home .hero,
+#screen-home .dim, #screen-home .navy, #screen-home .ui, #screen-home .bgwrap, #screen-home .bg .layer { will-change: opacity; }
+/* full-screen wrappers don't take the mouse; the things in them that can be focused do */
+#screen-home .ui, #screen-home .ui div { pointer-events: none; }
+#screen-home .ui [data-nav], #screen-home .ui [data-nav] *, #screen-home .ui .menu, #screen-home .ui .info { pointer-events: auto; }
+
+/* ---------- top bar ---------- */
+#screen-home .top .tab { position: absolute; top: 45px; font-size: 36px; line-height: 36px; font-weight: 300; color: var(--dim); }
+#screen-home .top .tab:nth-child(1) { left: 92px; }
+#screen-home .top .tab:nth-child(2) { left: 290px; }
+#screen-home .top .tab.sel { font-weight: 600; color: var(--text); }
+#screen-home .top .clock { position: absolute; top: 45px; right: 87px; font-size: 36px; line-height: 36px; font-weight: 300; }
+/* icons on 64 px discs centred on the measured glyphs: search (1411, 62.5), gear (1515.5, 62.5), power in the
+   avatar's place (1622, 64.5) */
+#screen-home .top .icon { position: absolute; top: 31px; width: 64px; height: 64px; color: #fff; }
+#screen-home .top .icon.search { left: 1379px; }
+#screen-home .top .icon.settings { left: 1484px; }
+#screen-home .top .icon.power { left: 1590px; top: 33px; }
+#screen-home .top .icon svg { position: absolute; left: 17px; top: 17px; width: 30px; height: 30px; }
+#screen-home .top .icon.settings svg { left: 16px; top: 16px; width: 32px; height: 32px; }
+#screen-home .top .icon.power svg { left: 15px; top: 15px; width: 34px; height: 34px; }
+#screen-home .top .icon > i { position: absolute; inset: 0; border-radius: 50%; background: #fff; opacity: 0; transform: scale(.8); transition: opacity 100ms, transform 100ms var(--ease-out); }
+#screen-home .top .icon.focus { color: #111; }
+#screen-home .top .icon.focus > i { opacity: 1; transform: none; }
+/* tooltip: "Search" ink x 1376–1445, cap 103–120, ≈24 px */
+#screen-home .top .tip {
+  position: absolute; left: 50%; top: 64px; transform: translateX(-50%); font-size: 24px; line-height: 32px; white-space: nowrap;
+  color: #fff; opacity: 0; transition: opacity 100ms;
+}
+#screen-home .top .icon.power .tip { top: 62px; }
+#screen-home .top .icon.focus .tip { opacity: 1; }
+
+/* ---------- tile row: 168 px squares at the focused size, scaled to 106 px when small (home.js places them) ---------- */
+#screen-home .tile {
+  position: absolute; left: 0; top: 126px; width: 168px; height: 168px; border-radius: 19px; overflow: hidden;
+  background-size: cover; background-position: center; transform-origin: 0 0; will-change: transform;
+  transition: transform var(--spring-row-ms) var(--spring-row) calc(-1 * var(--frame));
+}
+#screen-home .tile span {
+  position: absolute; left: 14px; right: 14px; bottom: 12px; font-size: 22px; line-height: 26px; font-weight: 600;
+  color: rgba(255, 255, 255, .92); overflow-wrap: anywhere;
+}
+#screen-home .tile.lib { background: #16171b; display: flex; align-items: center; justify-content: center; }
+#screen-home .tile.lib svg { width: 76px; height: 67px; }
+#screen-home.instant .tile, #screen-home.running .tile { transition: none; }
+
+/* 3 px ring with a 3 px gap around the focused art (172–339 → ring 166–345). Static at 60 % white: the PS5's shine and
+   ring shimmer cost 2.9 % of the PC and 7 % GPU while idle in WebView2 (decision 12, PLAN row A4). */
+#screen-home .ring {
+  position: absolute; left: 166px; top: 120px; width: 180px; height: 180px; border: 3px solid rgba(255, 255, 255, .6);
+  border-radius: 25px; pointer-events: none;
+}
+
+/* focused label: x 356, cap 252–272, 30 px Regular */
+#screen-home .label span { position: absolute; left: 354px; top: 242px; font-size: 30px; line-height: 42px; font-weight: 400; white-space: nowrap; }
+
+/* ---------- hero: bottom-anchored; the tagline's last baseline ≈ 770, logo ≈ 38 px above the tagline cap ---------- */
+#screen-home .hero-text { position: absolute; left: 172px; bottom: 302px; width: 720px; display: flex; flex-direction: column; align-items: flex-start; }
+/* PS5 logos are 140-147 px tall; wide ones stop at 480 px and sit on the bottom edge */
+#screen-home .logo img { display: block; height: 140px; width: auto; max-width: 480px; object-fit: contain; object-position: left bottom; }
+#screen-home .logo.wordmark { font-size: 60px; line-height: 66px; font-weight: 300; margin-bottom: -10px; max-width: 720px; }
+#screen-home .tagline {
+  margin-top: 27px; min-height: 42px; max-height: 84px; overflow: hidden; font-size: 30px; line-height: 42px; font-weight: 400;
+}
+#screen-home .hero.none .hero-text, #screen-home .hero.none .play, #screen-home .hero.none .more,
+#screen-home .hero.media .more { visibility: hidden; }
+/* Play 172–505 × 836–906, radius 35; ••• Ø70 at 523–593; white at ≈7 % */
+#screen-home .play, #screen-home .more { position: absolute; top: 836px; height: 70px; border-radius: 35px; outline: 3px solid transparent; outline-offset: 3px; }
+#screen-home .play::before, #screen-home .more::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; background: #fff; opacity: .07; transition: opacity 100ms var(--ease-out);
+}
+#screen-home .play { left: 172px; width: 333px; font-size: 30px; line-height: 70px; font-weight: 600; text-align: center; }
+#screen-home .play span { position: relative; transition: color 100ms; }
+#screen-home .more { left: 523px; width: 70px; display: flex; align-items: center; justify-content: center; gap: 6px; }
+#screen-home .more i { position: relative; width: 7px; height: 7px; border-radius: 50%; background: #fff; transition: background 100ms; }
+#screen-home .play.focus, #screen-home .more.focus { outline-color: rgba(255, 255, 255, .6); }
+#screen-home .play.focus::before, #screen-home .more.focus::before { opacity: 1; }
+#screen-home .play.focus span { color: #111; }
+#screen-home .more.focus i { background: #111; }
+/* box art: x 1378–1748, y 540–905; playtime where the PS5 shows its chip (1402, 810–841), last played under it (862) */
+#screen-home .box { position: absolute; left: 1378px; top: 540px; width: 370px; height: 365px; border-radius: 4px; overflow: hidden; }
+#screen-home .box[hidden], #screen-home .box .chip[hidden] { display: none; }
+#screen-home .box .cover { position: absolute; inset: 0; background-size: cover; background-position: center top; }
+#screen-home .box .cover span { position: absolute; left: 24px; right: 24px; top: 24px; font-size: 34px; line-height: 42px; font-weight: 300; overflow-wrap: anywhere; }
+#screen-home .box::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 190px; background: linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, .55) 45%, rgba(0, 0, 0, .85)); }
+#screen-home .box .chip {
+  position: absolute; z-index: 1; left: 24px; top: 270px; height: 31px; padding: 0 10px; border: 1px solid #c8ced4;
+  font-size: 18px; line-height: 29px; font-weight: 600; white-space: nowrap;
+}
+#screen-home .box .last { position: absolute; z-index: 1; left: 24px; top: 316px; font-size: 22px; line-height: 30px; font-weight: 600; white-space: nowrap; }
+
+/* ---------- hub: header (icon 72 px at 56,53; title x 175, cap 77–98), cards (502 × 502 at a 536 px pitch) ---------- */
+#screen-home .hubhead .icon { position: absolute; left: 56px; top: 52px; width: 72px; height: 72px; border-radius: 10px; }
+#screen-home .hubhead .title { position: absolute; left: 173px; top: 66px; font-size: 30px; line-height: 42px; font-weight: 400; white-space: nowrap; }
+/* in content coordinates: label cap 980 and cards at 1030, so 824 / 874 after Down 1 and 224 / 274 after Down 2 */
+#screen-home .cards .section { position: absolute; left: 172px; top: 971px; font-size: 25px; line-height: 34px; font-weight: 400; }
+#screen-home .cards .strip { position: absolute; left: 0; top: 1030px; transform: translateX(172px); }
+/* a card is one picture (§1.5, t0038): no panel under it. The ring is the tile row's: 3 px at 60 % white, 3 px out. */
+#screen-home .card {
+  position: absolute; left: 0; top: 0; width: 502px; height: 502px; border-radius: 6px; background: #14161b;
+  outline: 3px solid transparent; outline-offset: 3px;
+}
+#screen-home .card.focus { outline-color: rgba(255, 255, 255, .6); }
+#screen-home .card .pic { position: absolute; inset: 0; border-radius: 6px; overflow: hidden; }
+#screen-home .card .pic img, #screen-home .card .pic video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+/* the trailer shows once its first frame is up, over the poster: never a black frame */
+#screen-home .card .pic video { opacity: 0; transition: opacity 150ms var(--ease-out); }
+#screen-home .card .pic video.live { opacity: 1; }
+/* the dark fade the text sits on, part of the picture: clear to 45 %, then down to ≈85 % black at the bottom edge */
+#screen-home .card .pic::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, .5) 68%, rgba(0, 0, 0, .85) 100%);
+}
+#screen-home .card.shot .pic::after { content: none; }
+/* play glyph 79–114 × 626–661 on screen, title ≈24 px at y≈694, date ≈20 px grey at y≈740 */
+#screen-home .card .glyph { position: absolute; left: 23px; top: 352px; width: 36px; height: 36px; }
+#screen-home .card .glyph svg { width: 36px; height: 36px; display: block; }
+#screen-home .card .t, #screen-home .card .s { position: absolute; left: 24px; right: 24px; text-shadow: 0 1px 3px rgba(0, 0, 0, .5); }
+#screen-home .card .t { top: 405px; font-size: 24px; line-height: 32px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* news titles may take two lines, growing up from the title line */
+#screen-home .card.news .t {
+  top: auto; bottom: 65px; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+#screen-home .card .s { top: 452px; font-size: 20px; line-height: 28px; color: #a9abb2; white-space: nowrap; }
+/* About: the one card without a picture. The glass of the menus, the game's logo, then the store text. */
+#screen-home .card.about { background: linear-gradient(160deg, #262a33 0%, #15181e 55%, #0c0e12 100%); padding: 36px 32px 0; }
+#screen-home .card .alogo { height: 84px; display: flex; align-items: center; }
+#screen-home .card .alogo img { display: block; max-width: 300px; max-height: 84px; object-fit: contain; object-position: left center; }
+#screen-home .card .alogo.name { font-size: 30px; line-height: 40px; font-weight: 300; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#screen-home .card .atext {
+  margin-top: 28px; font-size: 22px; line-height: 34px; color: #c9cbd1; display: -webkit-box; -webkit-line-clamp: 9;
+  -webkit-box-orient: vertical; overflow: hidden;
+}
+
+/* ---------- the viewer: a screenshot or the trailer, full screen (home.js "the viewer") ---------- */
+#screen-home .viewer { position: absolute; inset: 0; visibility: hidden; }
+#screen-home .viewer.on { visibility: visible; }
+#screen-home .vdim { position: absolute; inset: 0; background: #000; opacity: 0; will-change: opacity; }
+/* each layer is the full screen, scaled down onto its card to open; the pictures' neighbours wait at .001 (drawn) */
+#screen-home .vpic, #screen-home .vvid {
+  position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; opacity: .001;
+  will-change: transform, opacity;
+}
+#screen-home .vpic img, #screen-home .vvid video { display: block; width: 100%; height: 100%; object-fit: contain; }
+#screen-home .vpic img:not([src]) { visibility: hidden; }
+/* the game and "3 of 8": small, low, on a soft fade */
+#screen-home .vhead {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 180px; opacity: 0; z-index: 3; will-change: opacity;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0), rgba(0, 0, 0, .5));
+}
+#screen-home .vhead span { position: absolute; bottom: 40px; font-size: 24px; line-height: 32px; white-space: nowrap; }
+#screen-home .vhead .vname { left: 56px; color: #fff; }
+#screen-home .vhead .vcount { right: 56px; color: #bab9be; }
+
+/* ---------- Options menu and Information (the Control Center panel look: dark gradient, outlined focus row) ---------- */
+#screen-home .menu, #screen-home .info {
+  position: absolute; visibility: hidden; opacity: 0; border-radius: 12px; background: linear-gradient(135deg, #1c1d22, #090d13);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .5);
+}
+#screen-home .menu { width: 460px; padding: 10px 0; }
+#screen-home .menu .item { position: relative; height: 80px; padding: 0 30px; font-size: 30px; line-height: 80px; white-space: nowrap; }
+#screen-home .menu .item.focus { box-shadow: inset 0 0 0 2px #fff; border-radius: 6px; margin: 0 8px; padding: 0 22px; background: rgba(255, 255, 255, .08); }
+#screen-home .info { left: 570px; top: 230px; width: 780px; padding: 34px 40px 22px; }
+#screen-home .info .head { font-size: 36px; line-height: 50px; font-weight: 300; margin-bottom: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#screen-home .info .row { display: flex; justify-content: space-between; gap: 30px; height: 72px; align-items: center; border-top: 1px solid rgba(255, 255, 255, .1); }
+#screen-home .info .row span { font-size: 24px; color: #a9abb2; white-space: nowrap; }
+#screen-home .info .row b { font-size: 26px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- the running game (row A5): a play mark on its tile, "│ Running" after its label (the PS5's suffix grey) ---------- */
+#screen-home .label em { font-style: normal; color: #d1d0d5; }
+#screen-home .tile.running::after {
+  content: ''; position: absolute; right: 12px; bottom: 12px; width: 36px; height: 36px; border-radius: 50%;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Cpath d='M14.5 11.5v13l10-6.5Z' fill='%23111'/%3E%3C/svg%3E") center / 36px no-repeat;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, .55);
+}
+
+/* ---------- the Library preview (2-library.md §1.3): the Library's count line and covers, 116 px below their Library
+   spots (count cap 404, "Sort by" ending at 1745, row 1 at 454); the covers as library.css draws them ---------- */
+#screen-home .preview { position: absolute; inset: 0; opacity: 0; will-change: opacity, transform; }
+#screen-home .preview .pcount { position: absolute; left: 172px; top: 400px; width: 1576px; display: flex; justify-content: space-between;
+  font-size: 25px; line-height: 25px; font-weight: 400; white-space: nowrap; }
+#screen-home .pcover { position: absolute; left: 0; top: 0; width: 296px; height: 296px; overflow: hidden; border-radius: 2px; }
+#screen-home .pcover img { display: block; width: 100%; height: 100%; object-fit: cover; }
+#screen-home .pcover img.portrait { object-position: 50% 0; }
+#screen-home .pcover span { position: absolute; left: 18px; top: 16px; right: 18px; font-size: 26px; line-height: 32px; font-weight: 600;
+  color: rgba(255, 255, 255, .92); overflow-wrap: anywhere; }

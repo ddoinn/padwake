@@ -1,0 +1,113 @@
+/* Control Center (design/ps5/1-home.md §1.6–1.8). Positions are the measured 1920×1080 numbers; text boxes are placed
+   so the ink lands on the measured cap lines (Open Sans: ascent 1.069 em, descent .293 em, cap .714 em). */
+#screen-control-center { z-index: 20; }           /* above whatever it opened over, whatever order screens loaded in */
+#screen-control-center.closing { visibility: visible; } /* the router hides it at once; it fades out first */
+/* the warm-up render (notices.js): painted, so its layers are rastered (and the GPU's shader programs for them
+   compiled) before the first real open, but not seen. !important: the layers' own opacity 0 below has the same
+   specificity and comes later, and a layer at opacity 0 is never rastered */
+#screen-control-center.warm { opacity: .002; }
+#screen-control-center.warm > * { opacity: 1 !important; }
+#screen-control-center > * { position: absolute; pointer-events: none; }
+#screen-control-center .blank, #screen-control-center .still, #screen-control-center .dim, #screen-control-center .shade,
+#screen-control-center .scrim, #screen-control-center .bar, #screen-control-center .cards { inset: 0; }
+#screen-control-center .bar, #screen-control-center .cards, #screen-control-center .dim, #screen-control-center .shade,
+#screen-control-center .scrim, #screen-control-center .clock, #screen-control-center .panel { will-change: opacity; opacity: 0; }
+#screen-control-center .bar { will-change: opacity, transform; }
+#screen-control-center [data-nav], #screen-control-center [data-nav] * { pointer-events: auto; }
+
+/* over a screen: black to ≈35 % (the art), and the bottom ≈300 px down to ≈10 % (§1.6) */
+#screen-control-center .dim { background: rgba(0, 0, 0, .65); }
+#screen-control-center .shade { background: linear-gradient(180deg, rgba(0, 0, 0, 0) 780px, rgba(0, 0, 0, .71) 900px, rgba(0, 0, 0, .71)); }
+#screen-control-center .blank, #screen-control-center .still, #screen-control-center .scrim { display: none; }
+
+/* over a game (§1.8): the game at full brightness; top scrim ≈10 % for y 0–90 and ≈56 % for 90–180, bottom 84 % for
+   630–720, 37 % for 720–810, black below ≈810 (brightness, so black at 1 − that) */
+#screen-control-center[data-mode="game"] .dim, #screen-control-center[data-mode="game"] .shade { display: none; }
+#screen-control-center[data-mode="game"] .blank, #screen-control-center[data-mode="game"] .still,
+#screen-control-center[data-mode="game"] .scrim { display: block; }
+#screen-control-center .blank { background: #000; }
+#screen-control-center .still { width: 1920px; height: 1080px; object-fit: fill; opacity: 0; }
+#screen-control-center .scrim {
+  background: linear-gradient(180deg, rgba(0, 0, 0, .9) 0, rgba(0, 0, 0, .9) 45px, rgba(0, 0, 0, .44) 135px, rgba(0, 0, 0, 0) 190px,
+    rgba(0, 0, 0, 0) 615px, rgba(0, 0, 0, .16) 675px, rgba(0, 0, 0, .63) 765px, #000 815px);
+}
+
+/* the clock stays at full brightness (Home's spot: right edge 1830, digits 50–75, 36 px Light) */
+#screen-control-center .clock { top: 45px; right: 87px; font-size: 36px; line-height: 36px; font-weight: 300; }
+
+/* ---------- icon bar: centres 112 px apart on y 1011, centred on the screen; focused: white disc Ø57, dark glyph,
+   label above (≈24 px, cap ≈942) ---------- */
+#screen-control-center .item { position: absolute; top: 1011px; width: 0; height: 0; color: #fff; transition: opacity 133ms; }
+#screen-control-center .item .disc {
+  position: absolute; left: -28.5px; top: -28.5px; width: 57px; height: 57px; border-radius: 50%; background: #fff;
+  opacity: 0; transform: scale(.8); transition: opacity 100ms, transform 100ms var(--ease-out);
+}
+#screen-control-center .item svg { position: absolute; left: -16px; top: -16px; width: 32px; height: 32px; transition: color 100ms; }
+#screen-control-center .item .label {
+  position: absolute; left: 0; top: -77px; transform: translateX(-50%); font-size: 24px; line-height: 32px; white-space: nowrap;
+  max-width: 600px; overflow: hidden; text-overflow: ellipsis;
+}
+/* the item's hit area for the mouse */
+#screen-control-center .item::after { content: ''; position: absolute; left: -50px; top: -40px; width: 100px; height: 80px; }
+#screen-control-center .item.focus { color: #111; }
+#screen-control-center .item.focus .disc { opacity: 1; transform: none; }
+#screen-control-center .item.focus .label { color: #fff; }
+#screen-control-center .item:not(.focus) .label { opacity: 0; }
+/* a panel open: the other icons dim to ≈30 % (§1.7) */
+#screen-control-center.paneled .item:not(.focus) { opacity: .3; }
+
+/* ---------- cards: 360×400 (x 84, bottom 889); the current one 432×520, left and bottom edges fixed (§1.6) ---------- */
+#screen-control-center .card {
+  position: absolute; bottom: 191px; border-radius: 12px; background: #15171c; overflow: hidden;
+  outline: 3px solid transparent; outline-offset: 3px;
+}
+#screen-control-center .card.focus { outline-color: rgba(255, 255, 255, .6); }
+#screen-control-center .card .pic { position: absolute; left: 0; right: 0; top: 0; bottom: 118px; background: center / cover; border-radius: 12px 12px 0 0; }
+#screen-control-center .card .pic.plain { background: linear-gradient(140deg, #2b3140, #10131a); }
+#screen-control-center .card .badge {
+  position: absolute; left: 16px; top: 16px; width: 48px; height: 48px; border-radius: 10px; background: #2a2d35 center / cover;
+  display: flex; align-items: center; justify-content: center; color: #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, .4);
+}
+#screen-control-center .card .badge svg { width: 30px; height: 30px; }
+#screen-control-center .card .kicker {
+  position: absolute; left: 22px; right: 22px; bottom: 64px; font-size: 22px; line-height: 30px; color: #a9abb2;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#screen-control-center .card .title {
+  position: absolute; left: 22px; right: 22px; bottom: 22px; font-size: 28px; line-height: 38px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ---------- panels (§1.7): above their icon, bottom at 880, a dark gradient, rows 96 px of 30 px text, the focused row
+   outlined 2 px; header ≈24 px ---------- */
+#screen-control-center .panel {
+  bottom: 200px; display: none; border-radius: 12px; background: linear-gradient(135deg, #15191d, #090d13);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, .55);
+}
+#screen-control-center .panel.on { display: block; }
+#screen-control-center .panel .head {
+  height: 80px; padding: 26px 30px 0; font-size: 24px; line-height: 32px; color: #fff; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis;
+}
+#screen-control-center .panel .rows { padding-bottom: 12px; }
+#screen-control-center .row {
+  position: relative; height: 96px; margin: 0 4px; padding: 0 26px; display: flex; align-items: center; gap: 24px;
+  justify-content: space-between; font-size: 30px; line-height: 40px; border-radius: 6px;
+}
+#screen-control-center .row .l { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+#screen-control-center .row .v {
+  flex: none; max-width: 56%; font-size: 22px; line-height: 30px; color: #c8c9ce; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; display: flex; align-items: center; gap: 16px;
+}
+#screen-control-center .row.focus { box-shadow: inset 0 0 0 2px #fff; background: rgba(255, 255, 255, .06); }
+#screen-control-center .row.text { height: 56px; font-size: 24px; line-height: 32px; color: #a9abb2; }
+/* slider: a thin light track ≈120 px ending ≈16 px from the panel's right edge, a white knob */
+#screen-control-center .row .track { position: relative; width: 120px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .3); }
+#screen-control-center .row .track i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px; background: #fff; }
+#screen-control-center .row .track em { position: absolute; top: -6px; width: 16px; height: 16px; margin-left: -8px; border-radius: 50%; background: #fff; }
+#screen-control-center .row .v b { font-weight: 400; min-width: 40px; text-align: right; }
+/* toggle as in Settings */
+#screen-control-center .switch { position: relative; width: 63px; height: 32px; border-radius: 16px; background: rgba(255, 255, 255, .25); }
+#screen-control-center .switch i { position: absolute; left: 4px; top: 4px; width: 24px; height: 24px; border-radius: 50%; background: #fff; transition: left 120ms var(--ease-out); }
+#screen-control-center .switch.on { background: #fff; }
+#screen-control-center .switch.on i { left: 35px; background: #111; }

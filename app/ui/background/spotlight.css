@@ -1,0 +1,13 @@
+/* The spotlight background (spotlight.js; design/ps5/3-settings-a.md §1.1, motion row 21). The layers are small
+   pre-drawn images scaled up; spotlight.js steps their opacity and transform a few times a second, so they stay
+   promoted (no repaint when they change). */
+.spot { position: absolute; inset: 0; overflow: hidden; }
+.spot-base { position: absolute; inset: 0; background: #0b0b14 0 0 / 100% 100% no-repeat; }
+/* faint static fine rays in the cone (the footage's fine rays don't move; only the broad sweep does) */
+.spot-base::before { content: ''; position: absolute; inset: 0;
+  background: conic-gradient(from 150deg at 310px -120px,
+    rgba(200, 170, 165, 0) 0deg, rgba(200, 170, 165, .035) 5deg, rgba(200, 170, 165, 0) 10deg, rgba(200, 170, 165, .04) 15deg,
+    rgba(200, 170, 165, .01) 20deg, rgba(200, 170, 165, .035) 26deg, rgba(200, 170, 165, 0) 33deg, rgba(200, 170, 165, .025) 39deg, rgba(200, 170, 165, 0) 46deg);
+  -webkit-mask-image: radial-gradient(ellipse 900px 820px at 310px -120px, #000 25%, transparent 100%);
+  mask-image: radial-gradient(ellipse 900px 820px at 310px -120px, #000 25%, transparent 100%); }
+.spot img { position: absolute; display: block; will-change: transform, opacity; pointer-events: none; }

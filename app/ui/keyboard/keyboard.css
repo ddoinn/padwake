@@ -1,0 +1,46 @@
+/* On-screen keyboard (keyboard.js): the PS5 keyboard's look. Numbers are 1920×1080 stage px, scaled from the PS5's
+   Search (a 1.232× crop): the field x 172–1748 × y 150–221, the panel 870 × 441 at (172, 228) under the field's left
+   end. The layers are see-through dark over the screen's background, so its light shows through as on the PS5.
+   Search lays it over its own field and hides the dim and title (search.css). */
+.osk { position: absolute; inset: 0; z-index: 50; font-family: 'Open Sans', sans-serif; }
+/* alone (Settings): an opaque cover that keeps the spotlight from the top-left (3-settings-a.md §1.1), so the page
+   under it doesn't show through the see-through panel */
+.osk-dim { position: absolute; inset: 0;
+  background: radial-gradient(ellipse 1100px 820px at 310px -120px, rgba(118, 100, 99, .5), rgba(58, 50, 56, .22) 45%, transparent 75%),
+    linear-gradient(to right, #100f16, #03030c); }
+/* the title sits where Search has its tabs: x 172, cap 84, 32 px */
+.osk-title { position: absolute; left: 172px; top: 78px; width: 1576px; font: 300 32px/32px 'Open Sans', sans-serif; color: #fff;
+  white-space: nowrap; overflow: hidden; }
+
+/* the field: dark glass, a 3 px grey line along its bottom; text x 200 (Search: 242, after its glyph), 30 px */
+.osk-field { position: absolute; left: 172px; top: 150px; width: 1576px; height: 71px; background: rgba(6, 8, 12, .72);
+  box-shadow: inset 0 -3px 0 rgba(170, 170, 186, .32); }
+.osk-field input { position: absolute; left: 28px; top: 0; width: calc(100% - 28px - 32px); height: 68px; border: 0; outline: 0;
+  background: transparent; color: #fff; font: 300 30px 'Open Sans', sans-serif; caret-color: #fff; }
+.osk-field input::placeholder { color: rgba(255, 255, 255, .5); }
+
+/* the panel: a blank strip (the PS5's suggestions), a darker grid of plain glyphs, then two rows of function keys */
+.osk-panel { position: absolute; left: 172px; top: 228px; width: 870px; height: 441px;
+  background: linear-gradient(to bottom, transparent 329px, rgba(0, 0, 4, .45) 329px); }
+.osk-strip { position: absolute; left: 0; top: 0; width: 870px; height: 63px; background: rgba(6, 8, 12, .72); }
+.osk-grid { position: absolute; left: 0; top: 63px; width: 870px; height: 266px; background: rgba(0, 0, 5, .72); }
+.osk-keys { position: absolute; inset: 0; }
+.osk-key { position: absolute; display: grid; place-items: center; font: 400 30px/1 'Open Sans', sans-serif; color: #f2f2f6; }
+/* function keys: lifted cells 3 px apart, with a darker line between them and the grid */
+.osk-key.fn { background: rgba(150, 156, 170, .11); font-size: 23px; color: rgba(255, 255, 255, .78); }
+.osk-key.fn.on, .osk-key.fn.done { color: #fff; font-weight: 600; }
+.osk-key .g { display: grid; place-items: center; }
+.osk-key svg { display: block; }
+.osk-key.shift { color: rgba(255, 255, 255, .62); }
+.osk-key.shift.on { color: #fff; }
+.osk-key.shift.on svg path { fill: currentColor; }
+.osk-key.done { font-size: 24px; }
+/* the pad hints: tiny grey labels in the top-right corner */
+.osk-key .hint { position: absolute; right: 5px; top: 3px; font: 600 12px/1 'Open Sans', sans-serif; color: rgba(225, 225, 235, .5);
+  letter-spacing: .02em; }
+
+/* focus: the cell lit from below and a light ring 2 px outside it (no motion: focus moves on the next frame) */
+.osk-key.focus { z-index: 1; color: #fff;
+  background: linear-gradient(to bottom, rgba(150, 156, 172, .3), rgba(160, 162, 182, .5));
+  box-shadow: 0 0 0 2px rgba(8, 9, 14, .85), 0 0 0 5px rgba(222, 216, 222, .78); border-radius: 2px; }
+.osk-key.fn.focus .hint { color: rgba(255, 255, 255, .75); }

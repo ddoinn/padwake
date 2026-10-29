@@ -1,0 +1,88 @@
+/* Game Library (row A8): design/ps5/2-library.md §1. Numbers are 1920×1080 stage px. Text boxes are placed so the
+   ink lands on the measured cap lines (Open Sans: ascent 1.069 em, descent .293 em, cap .714 em). */
+
+#screen-library { background: #000004; }
+#screen-library .lbg { position: absolute; inset: 0; z-index: 0; background: #000004; }
+#screen-library .lbg canvas { display: block; width: 100%; height: 100%; }
+
+/* ---------- header (fixed): glyph 41 × 36 at (68, 70), "Game Library" x 172 cap 77, 31 px ---------- */
+#screen-library .head { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+#screen-library .hicon { position: absolute; left: 0; top: 0; width: 168px; height: 168px; transform-origin: 0 0; } /* placed by library.js */
+#screen-library .hicon .sq { position: absolute; inset: 0; border-radius: 19px; background: #16171b; opacity: 0; }
+#screen-library .hicon svg { position: absolute; left: 46px; top: 50.5px; width: 76px; height: 67px; }
+#screen-library .htitle { position: absolute; left: 172px; top: 72px; font-size: 31px; line-height: 31px; font-weight: 400;
+  white-space: nowrap; transform-origin: 0 0; }
+
+/* ---------- tabs (fixed): text x 172, cap 151, 32 px; 70 px between labels; focus box 30 px either side, y 122–205 */
+#screen-library .tabs { position: absolute; left: 172px; top: 145px; height: 32px; display: flex; gap: 70px; z-index: 1; }
+#screen-library .tab { font-size: 32px; line-height: 32px; font-weight: 300; white-space: nowrap; color: #55545b;
+  transition: color 170ms cubic-bezier(0, 0, .2, 1); }
+#screen-library .tab.sel, #screen-library.on-tabs .tab { color: #fff; }
+#screen-library.on-tabs .tab { transition-duration: 120ms; }
+#screen-library .tabbox { position: absolute; left: 0; top: -23px; height: 84px; border: 3px solid rgba(255, 255, 255, .8);
+  border-radius: 4px; opacity: 0; pointer-events: none; }
+#screen-library.on-tabs .tabbox { opacity: 1; }
+
+/* ---------- the scrolled part: clipped at y 260 (§1.2); content coordinates are screen coordinates ---------- */
+#screen-library .view { position: absolute; left: 0; right: 0; top: 260px; bottom: 0; overflow: hidden; z-index: 1; }
+#screen-library .slide { position: absolute; left: 0; top: -260px; width: 1920px; height: 1080px; }
+#screen-library .content { position: absolute; inset: 0; will-change: transform; }
+
+/* "All: N" x 172 cap 288, "Sort by: …" right to the grid edge (1748), 25 px */
+#screen-library .countline { position: absolute; left: 172px; top: 284px; width: 1576px; display: flex; justify-content: space-between;
+  font-size: 25px; line-height: 25px; font-weight: 400; white-space: nowrap; }
+
+/* covers: 296 × 296 at x 172 + 320 c, y 338 + 320 r; nothing draws until the art is decoded (§1.10) */
+#screen-library .cover { position: absolute; left: 0; top: 0; width: 296px; height: 296px; overflow: hidden; border-radius: 2px; }
+#screen-library .cover img { display: block; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 200ms linear; }
+#screen-library .cover img.portrait { object-position: 50% 0; }
+#screen-library .cover img.in { opacity: 1; }
+#screen-library .cover .name { position: absolute; left: 18px; top: 16px; right: 18px; font-size: 26px; line-height: 32px; font-weight: 600;
+  color: rgba(255, 255, 255, .92); overflow-wrap: anywhere; }
+/* the darker bottom behind the caption fades in on the focused cover and out on the old one (§2, 200 ms) */
+#screen-library .cover .shade { position: absolute; left: 0; right: 0; bottom: 0; height: 130px; opacity: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, .78), rgba(0, 0, 0, .5) 45%, rgba(0, 0, 0, 0)); transition: opacity 200ms linear; }
+#screen-library .cover.focus .shade { opacity: 1; }
+#screen-library .cover.focus .name { visibility: hidden; } /* the caption names it */
+
+/* the focus ring: 3 px, 3 px outside the cover (outer box cover ± 6), radius 4; static (decision 12) */
+#screen-library .ring { position: absolute; left: 0; top: 0; width: 308px; height: 308px; border: 3px solid rgba(255, 255, 255, .8);
+  border-radius: 4px; pointer-events: none; }
+/* caption: title x +18 cap +224 (21 px), status cap +261 (18 px, #BDBDBD), clipped at the cover's inner edge */
+#screen-library .caption { position: absolute; left: 0; top: 0; width: 296px; height: 296px; pointer-events: none; }
+#screen-library .caption .title { position: absolute; left: 18px; top: 216px; width: 260px; overflow: hidden; font-size: 21px;
+  line-height: 29px; font-weight: 400; white-space: nowrap; }
+#screen-library .caption .title span { display: inline-block; }
+#screen-library .caption .title span.loop::after { content: attr(data-copy); padding-left: 64px; }
+#screen-library .caption .status { position: absolute; left: 18px; top: 254px; width: 260px; overflow: hidden; font-size: 18px;
+  line-height: 25px; font-weight: 400; white-space: nowrap; color: #bdbdbd; }
+
+/* the scrollbar thumb at x 1760, 4 px, white ≈17 %; it hides 3 s after the last scroll over 950 ms */
+#screen-library .bar { position: absolute; left: 1760px; top: 0; width: 4px; border-radius: 2px; background: rgba(255, 255, 255, .17); z-index: 1; }
+#screen-library .bar.off { opacity: 0; transition: opacity 950ms linear; }
+
+/* an empty library */
+#screen-library .empty { display: none; position: absolute; left: 172px; top: 338px; width: 1100px; z-index: 1; }
+#screen-library.none .empty { display: block; }
+#screen-library .empty .msg { font-size: 31px; line-height: 42px; font-weight: 400; }
+#screen-library .empty .sub { margin-top: 12px; font-size: 25px; line-height: 36px; color: #bdbdbd; }
+
+/* ---------- the sort button (fixed): Ø 72 at (51, 338); focused it turns white with a faint ring outside ---------- */
+#screen-library .sortbtn { position: absolute; left: 51px; top: 338px; width: 72px; height: 72px; border-radius: 50%; background: #07080f;
+  color: #fff; z-index: 3; }
+#screen-library .sortbtn svg { position: absolute; left: 18px; top: 20px; width: 35px; height: 34px; }
+#screen-library .sortbtn.focus { background: #fbfdfd; color: #0b0c10; box-shadow: 0 0 0 3px #000004, 0 0 0 6px rgba(255, 255, 255, .35); }
+
+/* ---------- the sort menu: 512 × 376 docked beside the button at (132, 330) over a 65 % dim (§1.6, §1.7) ---------- */
+#screen-library .dim { position: absolute; inset: 0; z-index: 2; background: rgba(0, 0, 0, .65); opacity: 0; pointer-events: none; }
+#screen-library.menu-open .dim { opacity: 1; }
+#screen-library .menu { display: none; position: absolute; left: 132px; top: 330px; width: 512px; height: 376px; z-index: 4;
+  background: linear-gradient(to top right, #1d1e23, #060a10); }
+#screen-library.menu-open .menu { display: block; }
+#screen-library .menu .opt { position: absolute; left: 0; width: 512px; height: 72px; }
+#screen-library .menu .opt span { position: absolute; left: 91px; top: 21.6px; font-size: 31px; line-height: 31px; font-weight: 400; white-space: nowrap; }
+#screen-library .menu .opt svg { position: absolute; left: 41px; top: 30px; width: 22px; height: 16px; visibility: hidden; }
+#screen-library .menu .opt.cur svg { visibility: visible; }
+/* the focused option: ring x +3…+508, 82 tall, with a faint diagonal light */
+#screen-library .menu .mring { position: absolute; left: 3px; top: 3px; width: 506px; height: 82px; border: 3px solid rgba(255, 255, 255, .8);
+  border-radius: 4px; pointer-events: none; background: linear-gradient(135deg, rgba(14, 18, 24, 0), rgba(83, 86, 99, .35)); }

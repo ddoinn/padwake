@@ -1,0 +1,21 @@
+/* Toast (design/ps5/1-home.md §1.9): box 652×112 at (1236, 30), radius 13, a horizontal gradient #1C1D22 → #05090F
+   (opaque). Icon 64×64 at (1260, 53). Title x 1344, cap 55–71, ≈24 px #D3D4D9. Message cap 94–115, ≈30 px white.
+   Badge: a white disc Ø36 at 1820–1856 × 70–104. Text boxes are placed so the ink lands on those cap lines. */
+.toast { position: absolute; width: 652px; height: 112px; z-index: 900; pointer-events: none; will-change: opacity; font-family: 'Open Sans', sans-serif; }
+.toast-bg { position: absolute; inset: 0; border-radius: 13px; background: linear-gradient(90deg, #1c1d22, #05090f); will-change: opacity; }
+.toast-fg { position: absolute; inset: 0; will-change: opacity; }
+.toast-icon { position: absolute; left: 24px; top: 23px; width: 64px; height: 64px; border-radius: 10px; background: #2a2d35 center / cover; }
+.toast-icon.glyph { display: flex; align-items: center; justify-content: center; background: #2a2d35; }
+.toast-icon.glyph svg { width: 34px; height: 34px; }
+.toast-icon.none { display: none; }
+.toast-title {
+  position: absolute; left: 108px; right: 98px; top: 17px; font-size: 24px; line-height: 32px; font-weight: 400; color: #d3d4d9;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.toast-msg {
+  position: absolute; left: 108px; right: 98px; top: 54px; font-size: 30px; line-height: 40px; font-weight: 400; color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.toast-icon.none ~ .toast-title, .toast-icon.none ~ .toast-msg { left: 30px; }
+.toast-badge { position: absolute; left: 584px; top: 40px; width: 36px; height: 36px; }
+.toast-badge svg { display: block; width: 36px; height: 36px; }

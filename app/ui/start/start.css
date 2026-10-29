@@ -1,0 +1,26 @@
+/* The start screen (row A11): the light show, then "Press any button" (design/ps5/1-home.md §1.1). */
+#screen-start { background: #000; }
+/* during the reveal it sits behind Home, so Home's row comes in over the spotlight */
+#screen-start.under { z-index: -1; }
+#screen-start .intro { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; object-fit: cover; }
+#screen-start .prompt { position: absolute; inset: 0; opacity: 0; will-change: opacity; }
+/* PS5: centred, ink cap 235–255, ≈30 px Light, white (the cap sits 10 px under the box top at 30 / 42 px) */
+#screen-start .text {
+  position: absolute; left: 0; right: 0; top: 225px; text-align: center;
+  font-size: 30px; line-height: 42px; font-weight: 300; text-shadow: 0 2px 14px rgba(0, 0, 0, .4);
+}
+/* the button: a white Ø86 disc centred at (960, 563), our controller glyph in it */
+#screen-start .disc {
+  position: absolute; left: 917px; top: 520px; width: 86px; height: 86px; border-radius: 50%; background: #fff;
+  display: flex; align-items: center; justify-content: center;
+}
+#screen-start .disc svg { width: 56px; height: 56px; }
+/* the pulse: a soft glow ring around the disc, out to r≈80; start.js animates it (opacity, scale) a few times only */
+#screen-start .glow {
+  position: absolute; left: 880px; top: 483px; width: 160px; height: 160px; border-radius: 50%; opacity: 0;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0) 50%, rgba(255, 255, 255, .55) 55%,
+    rgba(255, 255, 255, .16) 70%, rgba(255, 255, 255, 0) 100%);
+  will-change: opacity, transform;
+}
+/* the bokeh (sparkle.js): a canvas over the band, above the video and the spotlight, under the prompt */
+#screen-start .spark { position: absolute; left: 0; top: 260px; width: 1920px; height: 820px; pointer-events: none; }

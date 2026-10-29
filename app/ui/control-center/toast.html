@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Padwake toast</title>
+<!-- One toast in its own transparent window while the app sleeps (src-tauri/src/system/toast.rs). The window is the toast
+     box; the 652×112 design box is scaled to it. ?title=&message=&icon= (a file path, or glyph:<name>). -->
+<style>
+@font-face { font-family: 'Open Sans'; src: url(../assets/fonts/OpenSans-Regular.ttf); font-weight: 400; font-display: block; }
+html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+#box { position: absolute; left: 0; top: 0; width: 652px; height: 112px; transform-origin: 0 0; }
+</style>
+<script type="module" src="./toast-window.js"></script>
+</head>
+<body><div id="box"></div></body>
+</html>

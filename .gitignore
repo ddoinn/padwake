@@ -1,0 +1,14 @@
+app/node_modules/
+app/src-tauri/target/
+app/src-tauri/gen/
+data/
+dist/
+shots/
+*.log
+sgdb.key
+.env
+.env.*
+
+# Release fingerprints belong with the downloadable archive, not the source tree.
+/build.json
+/SHA256SUMS.txt

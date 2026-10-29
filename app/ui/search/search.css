@@ -1,0 +1,58 @@
+/* Search (row A8): the PS5 Search's layout, scaled from its screenshot (a 1.232× crop) to the 1920×1080 stage. Text
+   boxes put the ink on cap lines (Open Sans: cap .714 em; a 32 px line box has its cap top 5.6 px down). The pad
+   keyboard (ui/keyboard) draws into this screen with the same field geometry; its dim and title are not used, so the
+   background and results stay visible while typing. */
+
+#screen-search { background: #000; overflow: hidden; }
+
+/* the background is the shared moving spotlight (ui/background/spotlight.js) */
+
+/* tabs: text x 172, cap 84, baseline 107, 32 px, 66 px between labels; the selected one white, the others dim */
+#screen-search .tabs { position: absolute; left: 172px; top: 78px; height: 32px; display: flex; gap: 66px; }
+#screen-search .tab { font-size: 32px; line-height: 32px; font-weight: 300; white-space: nowrap; color: rgba(255, 255, 255, .38); }
+#screen-search .tab.sel { color: #fff; }
+
+/* the field: x 172–1748, y 150–221, as the keyboard's (keyboard.css); glyph 31 px at (197, 169), text x 242 */
+#screen-search .field { position: absolute; left: 172px; top: 150px; width: 1576px; height: 71px; background: rgba(6, 8, 12, .72);
+  box-shadow: inset 0 -3px 0 rgba(170, 170, 186, .32); }
+#screen-search .field.focus { box-shadow: inset 0 -3px 0 rgba(170, 170, 186, .32), 0 0 0 3px rgba(4, 4, 10, .9), 0 0 0 6px rgba(255, 255, 255, .8); }
+#screen-search .field .glyph, #screen-search .osk-field::before { position: absolute; left: 25px; top: 19px; width: 31px; height: 31px; color: #fff; }
+#screen-search .field .glyph svg { display: block; width: 31px; height: 31px; }
+#screen-search .field .q, #screen-search .field .ph { position: absolute; left: 70px; right: 32px; top: 0; height: 68px; line-height: 68px;
+  font-size: 30px; font-weight: 300; white-space: nowrap; overflow: hidden; }
+#screen-search .field .ph { color: rgba(255, 255, 255, .5); display: none; }
+#screen-search.empty-q .field .ph { display: block; }
+#screen-search.typing .field { visibility: hidden; } /* the keyboard's field is on top */
+
+/* the pad keyboard: no dim or title, its field over ours with the glyph */
+#screen-search .osk { pointer-events: none; }
+#screen-search .osk-dim, #screen-search .osk-title { display: none; }
+#screen-search .osk-field, #screen-search .osk-panel { pointer-events: auto; }
+#screen-search .osk-field input { left: 70px; width: calc(100% - 70px - 32px); }
+#screen-search .osk-field::before { content: '';
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3E%3Ccircle cx='12.5' cy='12.5' r='9.5' fill='none' stroke='%23fff' stroke-width='3.2'/%3E%3Cpath d='M19.6 19.6 28 28' stroke='%23fff' stroke-width='3.6' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat; }
+
+/* "N results": x 172 cap 262, 25 px (the Library's count line); while typing, over the results right of the keys */
+#screen-search .label { position: absolute; left: 172px; top: 258px; font-size: 25px; line-height: 25px; white-space: nowrap; }
+#screen-search.typing .label { left: 1100px; top: 228px; max-width: 648px; overflow: hidden; text-overflow: ellipsis; }
+
+/* results: 200 px covers, pitch 224; 7 a row from (172, 300), or while typing 3 a row from (1100, 272), 9 at most */
+#screen-search .res { position: absolute; left: 0; top: 0; width: 200px; height: 200px; overflow: hidden; border-radius: 2px; }
+#screen-search.typing .res.more { display: none; }
+#screen-search .res img { display: block; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 200ms linear; }
+#screen-search .res img.portrait { object-position: 50% 0; }
+#screen-search .res img.in { opacity: 1; }
+#screen-search .res .name { position: absolute; left: 14px; top: 12px; right: 14px; font-size: 21px; line-height: 26px; font-weight: 600;
+  color: rgba(255, 255, 255, .92); overflow-wrap: anywhere; }
+#screen-search .res .shade { position: absolute; left: 0; right: 0; bottom: 0; height: 96px; opacity: 0; transition: opacity 200ms linear;
+  background: linear-gradient(to top, rgba(0, 0, 0, .8), rgba(0, 0, 0, .45) 50%, rgba(0, 0, 0, 0)); }
+/* the focused title: x +14, up to two lines ending 16 px above the bottom, 21 px */
+#screen-search .res .title { position: absolute; left: 14px; right: 14px; bottom: 14px; font-size: 21px; line-height: 27px; visibility: hidden;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+#screen-search .res.focus .shade { opacity: 1; }
+#screen-search .res.focus .title { visibility: visible; }
+#screen-search .res.focus .name { visibility: hidden; }
+
+/* the focus ring: 3 px, 3 px outside the cover, radius 4 (2-library.md §1.1) */
+#screen-search .ring { position: absolute; left: 0; top: 0; width: 212px; height: 212px; border: 3px solid rgba(255, 255, 255, .8);
+  border-radius: 4px; pointer-events: none; }

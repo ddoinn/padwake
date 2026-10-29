@@ -1,0 +1,16 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The main window may call every area's commands and listen to host events.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "input:default",
+    "games:default",
+    "library:default",
+    "system:default",
+    "settings:default",
+    "startup:default",
+    "media:default"
+  ]
+}
