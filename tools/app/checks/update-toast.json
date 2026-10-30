@@ -1,0 +1,11 @@
+[
+  {"wait": 2500},
+  {"assert": "__app.top.id === 'start'", "why": "the start screen is up"},
+  {"emit": "update", "payload": {"current": "0.1.0", "state": "ready", "latest": "0.2.0"}},
+  {"wait": 600},
+  {"assert": "import('./control-center/toast.js').then(m => !m.toastLog.some(t => /ready to install/.test(t.message)))", "why": "no update toast over the start screen"},
+  {"key": "Enter"}, {"wait": 700}, {"key": "Enter"}, {"wait": 3000},
+  {"assert": "__app.top.id === 'home'", "why": "a button reveals Home"},
+  {"assert": "import('./control-center/toast.js').then(m => m.toastLog.some(t => t.message === 'Version 0.2.0 is ready to install.'))", "why": "the held toast shows on Home"},
+  {"shot": "start-then-update-toast"}
+]

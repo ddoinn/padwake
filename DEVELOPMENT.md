@@ -27,6 +27,7 @@ node tools/app/ui-probe.mjs --query scene=home tools/app/checks/settings-dim-ove
 node tools/app/ui-probe.mjs --query scene=home tools/app/checks/cloud.json
 node tools/app/ui-probe.mjs --query "scene=home&captures=9" tools/app/checks/gallery.json
 node tools/app/ui-probe.mjs --query scene=home tools/app/checks/journal.json
+node tools/app/ui-probe.mjs --query "" tools/app/checks/update-toast.json
 ```
 
 The UI probe uses headless Edge and mock host data. Set EDGE to your Edge executable; its default path and the capture/input tools target the Windows development laptop.

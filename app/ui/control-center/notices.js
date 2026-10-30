@@ -151,19 +151,26 @@ export function warmControlCenter(app, g) {
 }
 
 // updates (cloud area): a toast once a new version has downloaded, and on the first start after an update
+// (Home loads under the start screen, and the first check runs 60 s after a start: a toast over "Press any button"
+// would be gone before anyone looked, so it waits until the start screen has gone)
+function afterStart(fn) {
+  const start = document.getElementById('screen-start');
+  if (!start?.classList.contains('on')) return fn();
+  const watch = new MutationObserver(() => { if (!start.classList.contains('on')) { watch.disconnect(); fn(); } });
+  watch.observe(start, { attributes: true, attributeFilter: ['class'] });
+}
+const ready = u => afterStart(() => toast({ title: 'System Software', message: `Version ${u.latest} is ready to install.`, icon: 'glyph:update' }));
 let updateState = null;
 host.on('update', u => {
-  if (u.state === 'ready' && updateState !== 'ready') {
-    toast({ title: 'System Software', message: `Version ${u.latest} is ready to install.`, icon: 'glyph:update' });
-  }
+  if (u.state === 'ready' && updateState !== 'ready') ready(u);
   updateState = u.state;
 });
-// (a start installs a waiting update, so one that is ready now came in while the start screen showed: toast it too)
+// (a start installs a waiting update, so one that is ready now came in while the app was starting: toast it too)
 host.cloud?.update().then(u => {
   const was = updateState;
   updateState = u.state;
   if (u.updatedFrom) setTimeout(() => toast({ title: 'System Software', message: `Updated to version ${u.current}.`, icon: 'glyph:update' }), 1500);
-  else if (u.state === 'ready' && was !== 'ready') toast({ title: 'System Software', message: `Version ${u.latest} is ready to install.`, icon: 'glyph:update' });
+  else if (u.state === 'ready' && was !== 'ready') ready(u);
 }).catch(() => {});
 
 host.on('library', list => { library.games = list ?? []; added(library.games); });
