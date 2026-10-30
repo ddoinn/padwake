@@ -64,26 +64,33 @@ finally { Pop-Location }
 Copy-Item "$Target\release\padwake.exe" "$out\padwake.exe" -Force
 $rev = git -C $root rev-parse HEAD
 $utf8 = New-Object Text.UTF8Encoding $false
-$a = [IO.Compression.ZipFile]::Open($zip, 'Update')
+# unpack the previous zip, swap the files, and pack it again with "/" in entry names (0.1.0's zip has "\", which
+# only Windows reads as folders)
+$stage = "$out\stage"
 try {
-  $top = ($a.Entries | Where-Object { $_.FullName -like '*/padwake.exe' } | Select-Object -First 1).FullName
-  if (-not $top) { throw "$zip has no padwake.exe" }
-  $top = $top.Substring(0, $top.LastIndexOf('/'))
-  function Put([string]$file, [byte[]]$bytes) {
-    $e = $a.GetEntry("$top/$file"); if ($e) { $e.Delete() }
-    $s = $a.CreateEntry("$top/$file", 'Optimal').Open()
-    try { $s.Write($bytes, 0, $bytes.Length) } finally { $s.Dispose() }
+  if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
+  [IO.Compression.ZipFile]::ExtractToDirectory($zip, $stage)
+  $dir = (Get-ChildItem $stage -Recurse -Filter padwake.exe | Select-Object -First 1).DirectoryName
+  if (-not $dir) { throw "$zip has no padwake.exe" }
+  Copy-Item "$out\padwake.exe" "$dir\padwake.exe" -Force
+  [IO.File]::WriteAllText("$dir\build.txt", "Padwake $Version`nSource commit: $rev`nWindows x64 portable release`n", $utf8)
+  if (Test-Path "$dir\NOTICE") {
+    $notice = [IO.File]::ReadAllText("$dir\NOTICE")
+    [IO.File]::WriteAllText("$dir\NOTICE", ([regex]'(?m)^Padwake \d+\.\d+\.\d+').Replace($notice, "Padwake $Version", 1), $utf8)
   }
-  $e = $a.GetEntry("$top/NOTICE")
-  if ($e) {
-    $r = New-Object IO.StreamReader($e.Open()); $notice = $r.ReadToEnd(); $r.Dispose()
-    Put 'NOTICE' $utf8.GetBytes(([regex]'(?m)^Padwake \d+\.\d+\.\d+').Replace($notice, "Padwake $Version", 1))
+  Remove-Item $zip -Force
+  $top = Split-Path $dir -Leaf
+  $a = [IO.Compression.ZipFile]::Open($zip, 'Create')
+  try {
+    foreach ($f in Get-ChildItem $dir -Recurse -File) {
+      $entry = "$top/" + $f.FullName.Substring($dir.Length + 1).Replace('\', '/')
+      [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($a, $f.FullName, $entry, 'Optimal')
+    }
   }
-  Put 'build.txt' $utf8.GetBytes("Padwake $Version`nSource commit: $rev`nWindows x64 portable release`n")
-  Put 'padwake.exe' ([IO.File]::ReadAllBytes("$out\padwake.exe"))
+  finally { $a.Dispose() }
+  Remove-Item $stage -Recurse -Force
 }
 catch { Restore; throw }
-finally { $a.Dispose() }
 
 $sums = foreach ($f in @($name, 'padwake.exe')) { '{0}  {1}' -f (Get-FileHash "$out\$f" -Algorithm SHA256).Hash.ToLower(), $f }
 [IO.File]::WriteAllText("$out\SHA256SUMS.txt", (($sums -join "`n") + "`n"), $utf8)
