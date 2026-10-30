@@ -19,7 +19,7 @@
 //   (+1300 ms). Home's own elements carry Web Animations that end with the reveal, so Home is left exactly as it
 //   draws itself, and this screen sits behind Home meanwhile, so the row comes in over the spotlight.
 // - Then this screen leaves the stack: the bokeh, the spotlight and the video are dropped, and nothing of it runs.
-// A restart after a crash (host.startup.info().restarted) goes straight to Home.
+// A restart after a crash or an update (host.startup.info().restarted) goes straight to Home.
 
 import { sparkle } from './sparkle.js';
 import { mount as spotlight } from '../background/spotlight.js';

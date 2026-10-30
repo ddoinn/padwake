@@ -8,9 +8,14 @@ use webview2_com::Microsoft::Web::WebView2::Win32::{
 };
 use webview2_com::TrySuspendCompletedHandler;
 use windows::core::Interface;
-use windows::Win32::Foundation::HWND;
+use windows::Win32::Foundation::{HWND, RECT};
+use windows::Win32::Graphics::Gdi::{GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST};
+use windows::Win32::System::Threading::GetCurrentProcessId;
 use windows::Win32::UI::Input::KeyboardAndMouse::{keybd_event, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP};
-use windows::Win32::UI::WindowsAndMessaging::{IsIconic, SetForegroundWindow, ShowWindow, SW_RESTORE};
+use windows::Win32::UI::WindowsAndMessaging::{
+    GetClassNameW, GetForegroundWindow, GetWindowRect, GetWindowThreadProcessId, IsIconic, IsWindowVisible,
+    SetForegroundWindow, ShowWindow, SW_RESTORE,
+};
 
 const VK_F24: u8 = 0x87;
 
@@ -31,6 +36,46 @@ pub fn bring_to_front(hwnd: isize) {
         f24();
         let _ = SetForegroundWindow(h);
     }
+}
+
+/// The foreground window, if it is another process's and covers its whole monitor (a full-screen game). The desktop
+/// and the taskbar don't count.
+pub fn other_fills_screen() -> Option<isize> {
+    fills_screen(unsafe { GetForegroundWindow() }.0 as isize)
+}
+
+/// `hwnd`, if it is another process's visible window covering its whole monitor; not the desktop or the taskbar.
+pub fn fills_screen(hwnd: isize) -> Option<isize> {
+    unsafe {
+        let h = HWND(hwnd as _);
+        if h.0.is_null() || !IsWindowVisible(h).as_bool() || IsIconic(h).as_bool() {
+            return None;
+        }
+        let mut pid = 0;
+        GetWindowThreadProcessId(h, Some(&mut pid));
+        if pid == 0 || pid == GetCurrentProcessId() {
+            return None;
+        }
+        let mut class = [0u16; 32];
+        let n = GetClassNameW(h, &mut class) as usize;
+        if SHELL_CLASSES.contains(&String::from_utf16_lossy(&class[..n]).as_str()) {
+            return None;
+        }
+        let mut r = RECT::default();
+        GetWindowRect(h, &mut r).ok()?;
+        let mut m = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
+        if !GetMonitorInfoW(MonitorFromWindow(h, MONITOR_DEFAULTTONEAREST), &mut m).as_bool() {
+            return None;
+        }
+        covers(&r, &m.rcMonitor).then_some(h.0 as isize)
+    }
+}
+
+/// The desktop's and the taskbar's windows, which are screen-sized but never a game.
+const SHELL_CLASSES: [&str; 3] = ["Progman", "WorkerW", "Shell_TrayWnd"];
+
+fn covers(w: &RECT, m: &RECT) -> bool {
+    w.left <= m.left && w.top <= m.top && w.right >= m.right && w.bottom >= m.bottom
 }
 
 /// Windows lets a background app take the foreground only right after input; F24 is a key no app uses.
@@ -107,4 +152,20 @@ pub fn wake<R: Runtime>(app: &AppHandle<R>) {
     let _ = w.with_webview(|wv| unsafe {
         let _ = wv.controller().MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_window_fills_the_screen_only_when_it_covers_the_monitor() {
+        let m = RECT { left: 0, top: 0, right: 1920, bottom: 1080 };
+        assert!(covers(&m, &m)); // borderless or exclusive full screen
+        assert!(covers(&RECT { left: -8, top: -8, right: 1928, bottom: 1088 }, &m)); // maximized, frame outside
+        assert!(!covers(&RECT { left: 0, top: 0, right: 1920, bottom: 1040 }, &m)); // above the taskbar
+        assert!(!covers(&RECT { left: 320, top: 180, right: 1600, bottom: 900 }, &m)); // a splash or launcher
+        let second = RECT { left: 1920, top: 0, right: 4480, bottom: 1440 };
+        assert!(covers(&second, &second) && !covers(&m, &second));
+    }
 }

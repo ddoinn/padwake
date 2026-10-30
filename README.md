@@ -20,6 +20,8 @@ Built with **Rust + Tauri**. Blazing-fast navigation. Made for a controller.
 - **Your games, in one place.** Pick a folder. Padwake finds games, fetches artwork, screenshots and trailers, and tracks playtime.
 - **Get straight to playing.** Launch a game; the window hides and WebView2 suspends. Quit the game and your library comes back.
 - **Everything on the controller.** Search, an on-screen keyboard, volume, display settings, power controls, mouse mode and a live button test.
+- **Your history, kept.** A Journal of every game you played, with time, stars, status and notes. Back it up to a private gist on your own GitHub account, free, and get it back on a new PC.
+- **Updates itself.** New versions download from GitHub Releases in the background and install at the next start. Press View in a game for a screenshot; View on Home opens the Media Gallery.
 - **Games and media.** Switch to YouTube, Netflix, Spotify, Twitch, Plex or Crunchyroll without leaving the launcher.
 
 ## Fast when you move. Quiet when you play.
@@ -54,6 +56,7 @@ Windows 10/11, x64. Requires **Microsoft Edge WebView2**. No installer; settings
 | **LB / RB** | Switch tabs; previous / next screenshot |
 | **LT / RT** | Jump through game rows, grids and hub cards |
 | **Menu** | Options for the focused game; sorting in Library |
+| **View** | Screenshot during a game; Media Gallery on Home |
 | **Guide — tap** | Open / close Control Center, including over a game |
 | **Guide — hold** | Go Home |
 

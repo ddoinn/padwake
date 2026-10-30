@@ -65,3 +65,41 @@ is safer than your main Microsoft account.
 
 **Power** (top right on Home, or **Settings → Power**) **→ Exit to Desktop** closes Padwake completely and shows
 the Windows desktop. To come back, start `padwake.exe` again, or sign out and in.
+
+## 8. Screenshots
+
+Press **View** (the button with two squares) while you play to save a screenshot of the game; a toast confirms it.
+On Home, **View** opens the **Media Gallery** with every screenshot, newest first: **A** shows one full screen, **X**
+deletes it. They are JPEG files in `data\captures`, one folder per game. Games that run in exclusive full screen or play
+protected video copy as black; Padwake says so instead of saving a black picture.
+
+## 9. Updates
+
+Padwake updates itself from its GitHub releases. It is free and needs no account.
+
+- About a minute after it starts, and every 6 hours, it looks for a new version, never while a game runs. A new
+  version downloads in the background; a toast says when it is ready.
+- It installs the next time Padwake starts. To install it now, go to **Settings → System → System Software →
+  System Software Update** and pick **Update and Restart**. It takes a few seconds.
+- **Install Updates Automatically** (same page) turns the background checks off; System Software Update still checks
+  when you select it.
+- The previous version stays beside the new one as `padwake.old.exe`. To go back, exit to the desktop, delete
+  `padwake.exe` and rename `padwake.old.exe` to `padwake.exe`.
+
+## 10. Back up your time and journal to GitHub
+
+**Settings → Saved Data** keeps your time played, sessions, ratings, status, progress and notes in a private gist on
+your own GitHub account. It is free. A new or reset PC gets them back.
+
+1. Select **Sign In with GitHub**. A code shows on the TV.
+2. On your phone or computer, go to `github.com/login/device`, enter the code and allow Padwake. It only asks for
+   gists.
+3. If that account already has a backup (from another PC), Padwake offers to restore it.
+
+After that, it backs up by itself a couple of minutes after each game and after you change your Journal (**Back Up
+Automatically**). **Back Up Now** does it at once. A restore never loses anything: each game keeps the larger time, and
+the notes you wrote on this PC stay. Games in the backup that aren't on this PC join the Journal marked "From backup",
+and get their time back when you put the game in your games folder under the same folder name.
+
+Art, trailers and your games folder aren't backed up: the PC fetches those again. The sign-in is kept in `data\`,
+readable only by your Windows account. **Sign Out** removes it; the backup stays on GitHub.

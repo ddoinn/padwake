@@ -11,6 +11,7 @@
     "system:default",
     "settings:default",
     "startup:default",
-    "media:default"
+    "media:default",
+    "cloud:default"
   ]
 }

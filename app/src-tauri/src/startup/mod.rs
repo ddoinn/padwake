@@ -42,13 +42,14 @@ async fn set_with_windows(on: bool) -> Result<bool, String> {
 
 #[derive(Serialize)]
 struct Info {
-    /// started again by the watchdog after a crash: the page skips the light show
+    /// started again by the watchdog after a crash, or by an update: the page skips the light show
     restarted: bool,
 }
 
 #[tauri::command]
 fn info() -> Info {
-    Info { restarted: restarted() }
+    let updated = std::env::args().any(|a| a == crate::cloud::UPDATE_FROM);
+    Info { restarted: restarted() || updated }
 }
 
 pub fn restarted() -> bool {

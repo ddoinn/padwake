@@ -505,14 +505,17 @@ function openDropdown(l, i) {
 }
 
 // ---------- dialogs: a centred question with pill buttons ----------
-// opts: {title, text (string, or fn of the seconds left), buttons: [{label, value}], focus, countdown (s), until}
+// opts: {title, text (string, or fn of the seconds left), code (a short code shown large, to type elsewhere), buttons:
+// [{label, value}], focus, countdown (s), until}
 // Resolves with the chosen button's value, null for B, 'timeout' when the countdown ends, or what `until` resolves to.
-export function dialog({ title, text = '', buttons = [{ label: 'OK', value: true }], focus = 0, countdown = 0, until } = {}) {
+export function dialog({ title, text = '', code = '', buttons = [{ label: 'OK', value: true }], focus = 0, countdown = 0, until } = {}) {
   overlay?.close();
   const d = document.createElement('div');
-  d.className = 'sdlg';
-  d.innerHTML = '<h2></h2><p></p><div class="btns"></div>';
+  const long = (typeof text === 'string' ? text : '').split('\n').length > 2;
+  d.className = `sdlg${code ? ' with-code' : ''}${long ? ' tall' : ''}`;
+  d.innerHTML = `<h2></h2><p></p>${code ? '<div class="code"></div>' : ''}<div class="btns"></div>`;
   d.querySelector('h2').textContent = title;
+  if (code) d.querySelector('.code').textContent = code;
   const p = d.querySelector('p');
   const btns = buttons.map((b, k) => {
     const e = document.createElement('div');

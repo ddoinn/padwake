@@ -1,7 +1,8 @@
 // What Control Center knows before it first opens, kept from boot (Home imports this module):
 // - notifications: games added, from `library` events (plus the last three days' additions at start, without toasts)
 // - the running session, from `game` events, and whether the app just woke over it after Guide (`over`)
-// - the toasts: "<game> / Was added to your library." and "Ready to play." when the app shows over a game that came up
+// - the toasts: "<game> / Was added to your library." and "Ready to play." when the app shows over a game that came up;
+//   "System Software" when an update is ready, and after the app was updated
 // Control Center reads `notices`, `session` and `takeOver()`.
 
 import { host } from '../host.js';
@@ -148,6 +149,22 @@ export function warmControlCenter(app, g) {
     .catch(() => warmedCards.delete(key))
     .finally(() => { if (app.top?.id === 'control-center' && app.top.el.classList.contains('warm')) app.pop(); });
 }
+
+// updates (cloud area): a toast once a new version has downloaded, and on the first start after an update
+let updateState = null;
+host.on('update', u => {
+  if (u.state === 'ready' && updateState !== 'ready') {
+    toast({ title: 'System Software', message: `Version ${u.latest} is ready to install.`, icon: 'glyph:update' });
+  }
+  updateState = u.state;
+});
+// (a start installs a waiting update, so one that is ready now came in while the start screen showed: toast it too)
+host.cloud?.update().then(u => {
+  const was = updateState;
+  updateState = u.state;
+  if (u.updatedFrom) setTimeout(() => toast({ title: 'System Software', message: `Updated to version ${u.current}.`, icon: 'glyph:update' }), 1500);
+  else if (u.state === 'ready' && was !== 'ready') toast({ title: 'System Software', message: `Version ${u.latest} is ready to install.`, icon: 'glyph:update' });
+}).catch(() => {});
 
 host.on('library', list => { library.games = list ?? []; added(library.games); });
 host.on('game', game);

@@ -236,6 +236,10 @@ fn run<R: Runtime>(app: AppHandle<R>, get: GetState) {
             if pad.guide && !last.guide {
                 crate::games::guide_down(&app);
             }
+            // View while a game is in front: a screenshot (the page is asleep then and gets nothing)
+            if pad.view && !last.view {
+                crate::games::view_pressed(&app);
+            }
             // sent while hidden too: over a running game the games area wakes the window first and sends it itself
             if let Some(kind) = guide.update(pad.guide, now) {
                 if !crate::games::guide(&app, kind) {

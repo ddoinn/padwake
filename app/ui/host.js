@@ -10,9 +10,11 @@
 //                                          'control-center' | 'home', then the guide event follows) | 'exited' (front:
 //                                          'app' if Home already showed over it, else 'game')}
 //                                 mouse    {on}: mouse mode started or ended (the pad drives the cursor meanwhile)
-//                                 library  the full list after any change
+//                                 library  the full list after any change (a journal review sends it too)
 //                                 settings the whole settings object after any change (host.settings.set)
 //                                 display  a display-mode trial: {state: 'trial' | 'kept' | 'reverted', mode}
+//                                 update   the update status (host.cloud.update) after any change
+//                                 backup   the backup status (host.cloud.backup) after any change
 //   host.fileUrl(path)          an absolute file path in the data dir (art, media) as a URL the page can load.
 // Without window.__TAURI__ (a plain browser, headless Edge) this is a mock host with fake data. The keyboard drives
 // input; window.__mock.emit(event, payload) sends host events from a test (pad state, a game exiting).
@@ -49,9 +51,15 @@ export const host = {
     session: () => call('games', 'session'),      // {id, kind, name, front: 'game' | 'app', startedAt, ready} or null
     overReady: () => call('games', 'over_ready'), // the still is on screen: the host may show the window (Guide tap over a game)
     backdrop: size => call('games', 'backdrop', { size }), // ArrayBuffer: a BMP of the screen as Guide was pressed over the game; size 'small' (half) | 'full'
+    // screenshots taken with View while a game was in front, newest first: [{game, name, path, thumb (480 px), takenAt}]
+    captures: () => call('games', 'captures'),
+    deleteCapture: path => call('games', 'delete_capture', { path }),
   },
   // A game: {id, name, folder, exe, art: {tile, background, logo, cover}, tagline, description, screenshots[], trailer,
-  // music, news: [{title, url, date, contents}], playtimeSec, lastPlayed, addedAt, steamAppId}. Art and media are file
+  // music, news: [{title, url, date, contents}], playtimeSec, lastPlayed, firstPlayed, sessions, journal: {rating 1–5,
+  // status: playing | finished | completed (100 %) | paused | dropped, progress 0–100, note}, addedAt, steamAppId,
+  // and removedAt (a journal entry whose folder is gone: no screenshots, trailer, music or news; restoredAt too if it came
+  // from a GitHub backup). Art and media are file
   // paths for fileUrl (square tile, 16:9 background without scrims, transparent logo, portrait cover, 1280 px shots,
   // 30 s muted trailer, music); description and news contents are plain text (about 300 characters for news); times
   // are Unix ms. Anything but id, name, folder and exe may be null or empty (no Steam match, or not fetched yet).
@@ -59,6 +67,9 @@ export const host = {
     list: () => call('library', 'list'),
     rescan: () => call('library', 'rescan'), // check the games folder now instead of within 30 s
     refresh: id => call('library', 'refresh', { id }), // fetch one game's info and art again; resolves with the game
+    journal: () => call('library', 'journal'), // played or reviewed games, then removed ones (removedAt)
+    review: (id, journal) => call('library', 'review', { id, journal }), // sets the whole journal; resolves with the game
+    forget: id => call('library', 'forget', { id }), // a removed game leaves the journal, art and all
   },
   // Settings (rows A9, A10): settings.json. set() merges a patch, saves and emits `settings` with the whole object.
   settings: {
@@ -98,6 +109,25 @@ export const host = {
     refresh: () => call('media', 'refresh'),
     open: id => call('media', 'open', { id }),
   },
+  // Online and free, through GitHub (cloud area): system software updates from the project's releases, and a backup
+  // of the library's time and journal in a private gist on the player's own account.
+  cloud: {
+    // {current, state: idle | checking | downloading | ready | latest | error, latest, notes (Markdown), progress 0..1,
+    //  checkedAt, error, updatedFrom (this start came from an update), auto}
+    update: () => call('cloud', 'update_status'),
+    checkUpdate: () => call('cloud', 'update_check'),     // resolves with the status after; a newer version downloads
+    installUpdate: () => call('cloud', 'update_install'), // the app restarts into the ready version
+    // {available (this build can sign in), signedIn, login, state: idle | signing-in | saving | restoring | error,
+    //  code: {userCode, uri, expiresAt} while signing in, savedAt, auto, error, found: {savedAt, machine, games} (a backup
+    //  found at sign-in, not restored yet), restored: {updated, added}}
+    backup: () => call('cloud', 'backup_status'),
+    signIn: () => call('cloud', 'backup_sign_in'),        // resolves with the code to show; `backup` follows when done
+    cancelSignIn: () => call('cloud', 'backup_cancel_sign_in'),
+    signOut: () => call('cloud', 'backup_sign_out'),
+    backUpNow: () => call('cloud', 'backup_now'),
+    restore: () => call('cloud', 'backup_restore'),       // merges the backup in: nothing here is lost
+    dismissFound: () => call('cloud', 'backup_dismiss'),
+  },
 };
 
 // ---------- mock host ----------
@@ -109,8 +139,21 @@ const slug = name => name.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace
 const mockGame = name => ({
   id: slug(name), name, folder: `W:\\games-test\\${name}`, exe: `W:\\games-test\\${name}\\${name.replace(/[^A-Za-z0-9]/g, '')}.exe`,
   art: { tile: null, background: null, logo: null, cover: null }, tagline: null, description: null, screenshots: [],
-  trailer: null, music: null, news: [], playtimeSec: 0, lastPlayed: null, addedAt: null, steamAppId: null,
+  trailer: null, music: null, news: [], playtimeSec: 0, lastPlayed: null, firstPlayed: null, sessions: 0,
+  journal: { rating: null, status: null, progress: null, note: null }, addedAt: null, steamAppId: null,
 });
+// ---- the journal (Library → Journal): reviews on some stand-ins, and games whose folders are gone
+const mockKept = [];
+const inJournal = g => g.playtimeSec > 0 || g.lastPlayed != null || Object.values(g.journal ?? {}).some(v => v != null);
+function cleanJournal(j = {}) {
+  const note = typeof j.note === 'string' ? j.note.trim().slice(0, 280) : '';
+  return {
+    rating: j.rating > 0 ? Math.min(5, Math.round(j.rating)) : null,
+    status: ['playing', 'finished', 'completed', 'paused', 'dropped'].includes(j.status) ? j.status : null,
+    progress: j.progress == null ? null : Math.max(0, Math.min(100, Math.round(j.progress))),
+    note: note || null,
+  };
+}
 // the stand-in library from tools/make-test-games.ps1, in the order the Rust host lists it (folder name, A–Z)
 const mockLibrary = ['Celeste', 'Cyberpunk 2077', 'Dark Souls Remastered', 'Elden Ring', 'Ghost of Tsushima DC', 'God of War',
   'Hades', 'Hollow Knight', 'Horizon Zero Dawn', 'Red Dead Redemption 2', 'Sekiro - Shadows Die Twice', 'Spider-man Remastered',
@@ -121,7 +164,12 @@ let mockSession = null;
 function mockExit(id) {
   if (mockRunning !== id) return;
   const g = mockLibrary.find(x => x.id === id);
-  if (g) { g.playtimeSec += Math.round((Date.now() - mockSession.startedAt) / 1000); g.lastPlayed = Date.now(); }
+  if (g) {
+    g.playtimeSec += Math.round((Date.now() - mockSession.startedAt) / 1000);
+    g.lastPlayed = Date.now();
+    g.sessions += 1;
+    g.firstPlayed ??= mockSession.startedAt;
+  }
   mockRunning = null;
   emit('library', mockLibrary);
   emit('game', { id, kind: mockSession?.kind ?? 'game', state: 'exited', front: mockSession?.front ?? 'game' });
@@ -209,6 +257,32 @@ if (isMock) {
     g.art = { tile: picture(512, 512, h), background: picture(960, 540, (h + 40) % 360, true), logo: wordmark(g.name) };
   });
   if (query.get('trailer') === '1') mockTrailer(mockLibrary);
+  // ?journal=0: an empty journal
+  if (query.get('journal') !== '0') {
+    const review = (id, rating, status, progress, note = null, sessions = 0) => {
+      const g = mockLibrary.find(x => x.id === id);
+      Object.assign(g, { sessions: sessions || Math.max(1, Math.round(g.playtimeSec / 5400)), firstPlayed: g.lastPlayed && g.lastPlayed - 30 * DAY,
+        journal: { rating, status, progress, note } });
+    };
+    review('hades', 5, 'playing', 64, 'One more run. Always one more run. Beat Hades with the Twin Fists on heat 4.');
+    review('celeste', 4, 'finished', 88, 'Chapter 7 broke me, in a good way.');
+    review('god-of-war', 5, 'completed', 100);
+    review('hollow-knight', 3, 'paused', 41);
+    review('cyberpunk-2077', 2, 'dropped', 23, 'Come back after the next big patch.');
+    const kept = (name, hours, days, sessions, journal, hue) => ({
+      ...mockGame(name), playtimeSec: Math.round(hours * 3600), lastPlayed: Date.now() - (days + 3) * DAY, firstPlayed: Date.now() - (days + 90) * DAY,
+      sessions, addedAt: Date.now() - (days + 120) * DAY, removedAt: Date.now() - days * DAY, journal: cleanJournal(journal),
+      tagline: `${name}: in your journal since you removed it.`,
+      art: hue == null ? { tile: null, background: null, logo: null, cover: null }
+        : { tile: picture(512, 512, hue), background: picture(960, 540, (hue + 40) % 360, true), logo: null, cover: null },
+    });
+    mockKept.push(
+      kept('The Witcher 3 Wild Hunt', 118.4, 21, 64, { rating: 5, status: 'completed', progress: 100, note: 'The Bloody Baron is still the best quest I have played.' }, 140),
+      kept('Inside', 4.2, 63, 3, { rating: 4, status: 'finished', progress: 100 }, 20),
+      kept('Death Stranding', 31.7, 140, 22, { rating: 3, status: 'dropped', progress: 45 }, 200),
+      kept('Portal 2', 9.1, 300, 7, { rating: 5, status: 'finished', progress: 90 }, null),
+    );
+  }
 }
 const mockMedia = ['YouTube', 'Netflix', 'Spotify', 'Twitch', 'Plex', 'Crunchyroll'].map((name, i) => ({
   id: slug(name), name, url: ['https://www.youtube.com/', 'https://www.netflix.com/', 'https://open.spotify.com/',
@@ -270,6 +344,25 @@ const MOCK = {
       const [, b64] = (size === 'small' ? picture(960, 540, 200) : picture(1920, 1080, 200)).split(',');
       return new Blob([Uint8Array.from(atob(b64), c => c.charCodeAt(0))], { type: 'image/jpeg' });
     },
+    // ?captures=0: none yet; else ten screenshots of four games over the last days (made once, on first use)
+    captures: () => {
+      if (!mockCaptures) {
+        const games = [['hades', 'Hades', 350], ['celeste', 'Celeste', 200], ['elden-ring', 'Elden Ring', 40], ['hollow-knight', 'Hollow Knight', 230]];
+        const n = Number(query.get('captures') ?? 10);
+        mockCaptures = Array.from({ length: n }, (_, k) => {
+          const [game, name, hue] = games[k % games.length];
+          const path = picture(1280, 720, (hue + k * 9) % 360, false, `${k + 1}`);
+          return { game, name, path: `${path}#${k}`, thumb: path, takenAt: Date.now() - k * 7.3 * 3600e3 };
+        });
+      }
+      return mockCaptures;
+    },
+    delete_capture: ({ path }) => {
+      const i = mockCaptures?.findIndex(c => c.path === path) ?? -1;
+      if (i < 0) throw new Error('not a capture');
+      mockCaptures.splice(i, 1);
+      return null;
+    },
   },
   library: {
     list: () => mockLibrary,
@@ -279,6 +372,21 @@ const MOCK = {
       if (!g) throw new Error(`no game ${id}`);
       setTimeout(() => emit('library', mockLibrary), 300);
       return g;
+    },
+    journal: () => [...mockLibrary.filter(inJournal), ...mockKept],
+    review: ({ id, journal }) => {
+      const g = mockLibrary.find(x => x.id === id) ?? mockKept.find(x => x.id === id);
+      if (!g) throw new Error(`no game ${id}`);
+      g.journal = cleanJournal(journal);
+      emit('library', mockLibrary);
+      return g;
+    },
+    forget: ({ id }) => {
+      const i = mockKept.findIndex(x => x.id === id);
+      if (i < 0) throw new Error(`${id} is not a removed game`);
+      mockKept.splice(i, 1);
+      emit('library', mockLibrary);
+      return null;
     },
   },
   settings: {
@@ -344,7 +452,77 @@ const MOCK = {
     set_with_windows: ({ on }) => (mockSystem.withWindows = !!on),
     info: () => ({ restarted: query.get('restarted') === '1' }), // ?restarted=1: as after a crash
   },
+  // ---- updates and backup: ?update=ready (a downloaded 0.2.0) | latest | error, ?updated=1 (this start came from an
+  // update), ?backup=signed-in | unavailable, ?signInMs= (how long the player takes to type the code; default 4 s)
+  cloud: {
+    update_status: () => mockCloud.update,
+    update_check: async () => {
+      const u = mockCloud.update;
+      if (u.state === 'ready') return u;
+      mockUpdate({ state: 'checking', error: null });
+      await sleep(500);
+      if (query.get('update') === 'latest') return mockUpdate({ state: 'latest', checkedAt: Date.now() });
+      if (query.get('update') === 'error') return mockUpdate({ state: 'error', error: 'GitHub answered 503', checkedAt: Date.now() });
+      for (let p = 0; p <= 1; p += 0.25) { mockUpdate({ state: 'downloading', latest: '0.2.0', progress: p }); await sleep(150); }
+      return mockUpdate({ state: 'ready', latest: '0.2.0', progress: null, notes: MOCK_NOTES, checkedAt: Date.now() });
+    },
+    update_install: () => {
+      if (mockCloud.update.state !== 'ready') throw new Error('No update is ready.');
+      mockCloud.installed = true;
+      return null;
+    },
+    backup_status: () => mockCloud.backup,
+    backup_sign_in: () => {
+      if (!mockCloud.backup.available) throw new Error("GitHub sign-in isn't set up in this version of Padwake.");
+      clearTimeout(mockCloud.signIn);
+      mockCloud.signIn = setTimeout(() => mockBackup({
+        state: 'idle', code: null, signedIn: true, login: 'player',
+        found: { savedAt: Date.now() - 3 * DAY, machine: 'LIVING-ROOM', games: 9 },
+      }), Number(query.get('signInMs') ?? 4000));
+      return mockBackup({ state: 'signing-in', error: null, code: { userCode: '8F2C-71QD', uri: 'https://github.com/login/device', expiresAt: Date.now() + 900e3 } });
+    },
+    backup_cancel_sign_in: () => (clearTimeout(mockCloud.signIn), mockBackup({ state: 'idle', code: null })),
+    backup_sign_out: () => mockBackup({ signedIn: false, login: null, savedAt: null, found: null, restored: null, state: 'idle' }),
+    backup_now: async () => {
+      if (!mockCloud.backup.signedIn) throw new Error('Sign in to GitHub first.');
+      mockBackup({ state: 'saving' });
+      await sleep(600);
+      return mockBackup({ state: 'idle', savedAt: Date.now() });
+    },
+    backup_restore: async () => {
+      if (!mockCloud.backup.signedIn) throw new Error('Sign in to GitHub first.');
+      mockBackup({ state: 'restoring' });
+      await sleep(700);
+      for (const [name, hours, rating, status] of [['Gris', 6, 5, 'finished'], ['Outer Wilds', 21, 5, 'completed']]) {
+        if (mockKept.some(k => k.name === name)) continue;
+        mockKept.push({ ...mockGame(name), playtimeSec: hours * 3600, sessions: hours, lastPlayed: Date.now() - 40 * DAY,
+          removedAt: Date.now(), restoredAt: Date.now(), journal: cleanJournal({ rating, status }) });
+      }
+      emit('library', mockLibrary);
+      return mockBackup({ state: 'idle', found: null, restored: { updated: 3, added: 2 } });
+    },
+    backup_dismiss: () => mockBackup({ found: null }),
+  },
 };
+
+let mockCaptures = null;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const MOCK_NOTES = '- Saved Data: back up your time played and journal to GitHub, free\n- Updates download by themselves and install the next time Padwake starts\n- The Journal shows games restored from a backup';
+const mockCloud = {
+  update: {
+    current: '0.1.0', state: query.get('update') === 'ready' ? 'ready' : 'idle', latest: query.get('update') === 'ready' ? '0.2.0' : null,
+    notes: query.get('update') === 'ready' ? MOCK_NOTES : null, progress: null, checkedAt: null, error: null,
+    updatedFrom: query.get('updated') === '1' ? '0.0.9' : null, auto: true,
+  },
+  backup: {
+    available: query.get('backup') !== 'unavailable', signedIn: query.get('backup') === 'signed-in',
+    login: query.get('backup') === 'signed-in' ? 'player' : null, state: 'idle', code: null,
+    savedAt: query.get('backup') === 'signed-in' ? Date.now() - 2 * 3600e3 : null, auto: true, error: null, found: null, restored: null,
+  },
+  installed: false,
+};
+const mockUpdate = patch => (Object.assign(mockCloud.update, patch, { auto: mockSettings.autoUpdate !== false }), emit('update', mockCloud.update), structuredClone(mockCloud.update));
+const mockBackup = patch => (Object.assign(mockCloud.backup, patch, { auto: mockSettings.backupAuto !== false }), emit('backup', mockCloud.backup), structuredClone(mockCloud.backup));
 
 const mockModes = [[1920, 1080, [144, 120, 60]], [1680, 1050, [60]], [1600, 900, [60]], [1366, 768, [60]], [1280, 1024, [75, 60]],
   [1280, 720, [60]], [1024, 768, [60]], [800, 600, [60]]].flatMap(([width, height, rates]) => rates.map(hz => ({ width, height, hz })));
@@ -385,6 +563,7 @@ async function mock(area, command, args) {
   return structuredClone(await fn(args));
 }
 
-if (isMock) window.__mock = { emit, library: mockLibrary, settings: mockSettings, rumbles: mockRumbles };
+if (isMock) window.__mock = { emit, library: mockLibrary, kept: mockKept, settings: mockSettings, rumbles: mockRumbles };
 if (isMock) window.__mock.system = mockSystem; // Settings tests read the power log and the display trial
+if (isMock) window.__mock.cloud = mockCloud; // update and backup tests
 if (isMock) window.__mock.guideOverGame = mockGuideOverGame; // Control Center tests: Guide over a running game

@@ -18,6 +18,12 @@
 // Covers load lazily per row, draw nothing until decoded, then fade in (§1.10).
 // Buttons: A shows the game on Home, B goes back to Home's Library tile, Y opens Search, Menu or the sort button
 // opens the sort menu, LT / RT jump 2 rows; Up from the first row reaches the tabs, Left from column 1 the button.
+// Tabs: Your Collection (the grid) and Journal (journal.js: played games, removed ones too). LB / RB or the tab row
+// switch them as the PS5 does (§2): the page empties for 200 ms, then the other fades in. The sort button and menu
+// sort whichever is on.
+
+import * as journal from './journal.js';
+import { mount as spotlight } from '../background/spotlight.js'; // the moving spotlight, as Search and Settings
 
 const FRAME = 1000 / 60;
 const COLS = 5, PITCH = 320, X0 = 172, Y0 = 338;  // covers are 296 px (library.css)
@@ -47,7 +53,8 @@ export const SORTS = [
   { id: 'za', label: 'Name (Z - A)' },
   { id: 'most', label: 'Most played' },
 ];
-const TABS = [{ id: 'collection', label: 'Your Collection' }]; // stores add { id: 'installed', label: 'Installed' }
+const TABS = [{ id: 'collection', label: 'Your Collection' }, { id: 'journal', label: 'Journal' }]; // stores add Installed
+const TAB_FADE = { duration: 315, delay: 200, easing: 'cubic-bezier(.33, 0, .67, 1)', fill: 'backwards' };
 
 const ICONS = {
   library: '<svg viewBox="0 0 64 56"><g fill="#fff"><rect width="13" height="13" rx="2"/><rect x="18" width="13" height="13" rx="2"/><rect x="36" width="13" height="13" rx="2"/><rect y="18" width="13" height="13" rx="2"/><rect y="36" width="13" height="13" rx="2"/><path d="M27 24h26a9 9 0 0 1 8.7 6.8l2 9.2a6 6 0 0 1-10.4 5.2L49 41H31l-4.3 4.2a6 6 0 0 1-10.4-5.2l2-9.2A9 9 0 0 1 27 24Zm2.5 6v3.5H26v3h3.5V40h3v-3.5H36v-3h-3.5V30Zm19 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm5 3.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z"/></g></svg>',
@@ -69,7 +76,7 @@ const $ = {};
 let games = [];          // sorted
 let sortId = 'played';
 let gamesRoot = '';
-let zone = 'grid';       // grid | tabs | button | menu | busy
+let zone = 'grid';       // grid | journal (the Journal tab's list) | tabs | button | menu | busy
 let index = 0, menuIndex = 0, menuFrom = 'grid', tabIndex = 0, heldRowAt = 0;
 let scrollY = 0;         // the content's scroll target
 let scrollAnim = null, scrollFrom = 0;
@@ -99,23 +106,27 @@ export default {
       <div class="dim"></div>
       <div class="head"><div class="hicon"><div class="sq"></div>${ICONS.library}</div><div class="htitle">Game Library</div></div>
       <div class="sortbtn" data-nav="sort">${ICONS.sort}</div>
-      <div class="menu">${SORTS.map((s, i) => `<div class="opt" data-nav="sort:${i}" style="top:${3 + i * 72}px">${ICONS.check}<span>${s.label}</span></div>`).join('')}<div class="mring"></div></div>`;
+      <div class="menu"><div class="mring"></div></div>`;
     for (const k of ['lbg', 'view', 'slide', 'content', 'countline', 'count', 'sortlabel', 'grid', 'ring', 'caption', 'empty',
       'bar', 'tabs', 'tabbox', 'dim', 'head', 'hicon', 'sq', 'htitle', 'sortbtn', 'menu', 'mring']) $[k] = el.querySelector(`.${k}`);
     $.title = el.querySelector('.caption .title span');
     $.status = el.querySelector('.caption .status');
     $.tabEls = [...el.querySelectorAll('.tab')];
-    $.opts = [...el.querySelectorAll('.menu .opt')];
-    $.lbg.append(illustration());
+    $.opts = [];
+    spotlight($.lbg);
     $.hicon.style.transform = ICON_REST;
     placeTabBox();
+    journal.mount({
+      app, host, root: el, scroll: { curve: SCROLL, ms: SCROLL_MS, frame: FRAME, ease: t => ease(SCROLL_PTS, t) },
+      toTabs: focusTabs, toButton: focusButton,
+    });
 
     host.on('library', list => setGames(list));
     host.on('settings', s => { gamesRoot = s?.gamesRoot ?? gamesRoot; paintEmpty(); });
     host.settings.get().then(s => { gamesRoot = s?.gamesRoot ?? ''; paintEmpty(); }).catch(() => {});
     // read-only state for tests (tools/app/ui-probe.mjs eval steps)
     window.__library = {
-      state: () => ({ zone, index, id: games[index]?.id, sort: sortId, order: games.map(g => g.id), scroll: scrollY, menu: menuIndex }),
+      state: () => ({ zone, tab: TABS[tabIndex].id, index, id: games[index]?.id, sort: sortId, order: games.map(g => g.id), scroll: scrollY, menu: menuIndex }),
       sort: id => applySort(id),
     };
     setGames(await host.library.list());
@@ -136,7 +147,7 @@ export default {
     // the morphs hold their end state (fill forwards) until the screen goes; cancel them so the next enter starts clean
     root.getAnimations({ subtree: true }).forEach(a => a.cancel());
     stopMarquee();
-    if (zone === 'busy') zone = 'grid';
+    if (zone === 'busy') zone = onJournal() ? 'journal' : 'grid';
   },
 
   action(name, e = {}) {
@@ -150,6 +161,7 @@ export default {
     if (name === 'menu' && !e.held) return openMenu(zone === 'button' ? 'button' : 'grid');
     if (zone === 'tabs') return tabsAction(name, e);
     if (zone === 'button') return buttonAction(name, e);
+    if (zone === 'journal') return journal.action(name, e);
     return gridAction(name, e);
   },
 };
@@ -210,6 +222,7 @@ const coverY = i => Y0 + rowOf(i) * PITCH;
 const scrollFor = i => (rowOf(i) === 0 ? 0 : coverY(i) - PIN_Y); // the first row stays at 338, the rest pin at 280
 
 function reset() {
+  if (tabIndex) selectTab(0, false);
   zone = games.length ? 'grid' : 'tabs';
   index = 0;
   closeMenu(true);
@@ -432,6 +445,7 @@ function paintBar(scrolled) {
 function focusTabs() {
   zone = 'tabs';
   placeFocus(null);
+  journal.blur();
   paintZone();
   return true;
 }
@@ -439,8 +453,23 @@ function focusTabs() {
 function focusButton() {
   zone = 'button';
   placeFocus(null);
+  journal.blur();
   paintZone();
   return true;
+}
+
+const onJournal = () => TABS[tabIndex].id === 'journal';
+
+// into the tab's content: the grid, or the journal's list
+function focusContent(ring = RING_IN) {
+  if (onJournal()) {
+    if (!journal.focus(ring)) return false;
+    zone = 'journal';
+    placeFocus(null);
+    paintZone();
+    return true;
+  }
+  return games.length ? focus(index, ring) : false;
 }
 
 // the tab box fades in 300 ms after a 170 ms delay when focus comes to the tabs (§2 "Tab box moves")
@@ -459,38 +488,71 @@ function placeTabBox() {
 }
 
 function tabsAction(name, e) {
-  if (name === 'down') return games.length ? focus(index) : false;
+  if (name === 'down') return focusContent();
   if (name === 'left' || name === 'right') return switchTab(tabIndex + (name === 'left' ? -1 : 1));
   if (e.held) return false;
   if (name === 'a') return 'none';
   return false;
 }
 
-// one tab until stores add "Installed"; a second tab slots in here
 function switchTab(i) {
   if (i < 0 || i >= TABS.length || i === tabIndex) return false;
-  tabIndex = i;
-  $.tabEls.forEach((el, k) => el.classList.toggle('sel', k === i));
-  placeTabBox();
-  paintZone();
+  selectTab(i, true);
   return true;
 }
 
+// §2 "Tab switch content": the old page goes in a frame, the page stays empty 200 ms, the new one fades in over 315 ms;
+// the tab box moves (old box gone, the new one fades in after 170 ms). Focus in the content stays in the content.
+function selectTab(i, animate) {
+  const inContent = zone === 'grid' || zone === 'journal';
+  closeMenu(true);
+  tabIndex = i;
+  $.tabEls.forEach((el, k) => el.classList.toggle('sel', k === i));
+  placeTabBox();
+  const j = onJournal();
+  root.classList.toggle('tab-journal', j);
+  journal.show(j);
+  placeFocus(null);
+  if (animate) {
+    for (const el of j ? [$.sortbtn] : [$.view, $.empty, $.bar, $.sortbtn]) el.animate([{ opacity: 0 }, { opacity: 1 }], TAB_FADE);
+    if (zone === 'tabs') $.tabbox.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300, delay: 170, easing: 'linear', fill: 'backwards' });
+  }
+  if (inContent && !focusContent({ delay: 200 + 140, ms: 140 })) zone = 'tabs';
+  paintZone();
+}
+
 function buttonAction(name, e) {
-  if (name === 'right' || name === 'down') return games.length ? focus(rowOf(index) * COLS) : false;
+  if (name === 'right' || name === 'down') return onJournal() ? focusContent() : games.length ? focus(rowOf(index) * COLS) : false;
   if (name === 'up') return !e.held && focusTabs();
   if (e.held) return false;
   if (name === 'a') return openMenu('button');
   return false;
 }
 
+// the sort orders of the tab that is on
+const menuSorts = () => (onJournal() ? journal.SORTS : SORTS);
+const curSort = () => (onJournal() ? journal.sort() : sortId);
+
 function openMenu(from) {
   menuFrom = from;
   zone = 'menu';
   placeFocus(null);
+  journal.blur();
   paintZone();
-  menuIndex = Math.max(0, SORTS.findIndex(s => s.id === sortId));
-  $.opts.forEach((el, i) => el.classList.toggle('cur', SORTS[i].id === sortId));
+  const sorts = menuSorts();
+  $.opts.forEach(el => el.remove());
+  $.opts = sorts.map((s, i) => {
+    const el = document.createElement('div');
+    el.className = `opt${s.id === curSort() ? ' cur' : ''}`;
+    el.dataset.nav = `sort:${i}`;
+    el.style.top = `${3 + i * 72}px`;
+    el.innerHTML = `${ICONS.check}<span></span>`;
+    el.querySelector('span').textContent = s.label;
+    return el;
+  });
+  $.mring.before(...$.opts);
+  $.menu.style.height = `${sorts.length * 72 + 16}px`;
+  menuIndex = Math.max(0, sorts.findIndex(s => s.id === curSort()));
   paintMenu();
   root.classList.add('menu-open');
   $.dim.getAnimations().forEach(a => a.cancel());
@@ -507,8 +569,10 @@ function closeMenu(instant) {
   $.dim.getAnimations().forEach(a => a.cancel());
   if (!instant) $.dim.animate([{ opacity: 1 }, { opacity: 0 }], { duration: MENU_MS, easing: 'linear' });
   if (zone === 'menu') {
-    zone = menuFrom === 'button' || !games.length ? 'button' : 'grid';
+    const empty = onJournal() ? !journal.count() : !games.length;
+    zone = menuFrom === 'button' || empty ? 'button' : onJournal() ? 'journal' : 'grid';
     if (zone === 'grid') placeFocus(RING_IN);
+    if (zone === 'journal') journal.focus(RING_IN);
     paintZone();
   }
   return true;
@@ -522,18 +586,23 @@ function paintMenu() {
 function menuAction(name, e) {
   if (name === 'up' || name === 'down') {
     const i = menuIndex + (name === 'up' ? -1 : 1);
-    if (i < 0 || i >= SORTS.length) return false;
+    if (i < 0 || i >= menuSorts().length) return false;
     menuIndex = i;
     paintMenu();
     return true;
   }
   if (e.held) return false;
   if (name === 'a') {
-    const chosen = SORTS[menuIndex].id;
+    const chosen = menuSorts()[menuIndex].id;
     closeMenu(false);
-    if (chosen !== sortId) {
-      applySort(chosen);
-      if (zone === 'grid') placeFocus(RING_IN);
+    if (chosen !== curSort()) {
+      if (onJournal()) {
+        journal.applySort(chosen);
+        if (zone === 'journal') journal.focus(RING_IN);
+      } else {
+        applySort(chosen);
+        if (zone === 'grid') placeFocus(RING_IN);
+      }
     }
     return true;
   }
@@ -550,6 +619,10 @@ function pointer(name, e) {
     menuIndex = i;
     paintMenu();
     return name === 'click' ? menuAction('a', {}) : 'none';
+  }
+  if (kind === 'jrow') {
+    if (zone !== 'journal') { zone = 'journal'; paintZone(); }
+    return journal.pointer(name, i);
   }
   if (kind === 'cover') {
     if (name === 'click') return open(i);
@@ -596,55 +669,12 @@ function back() {
   $.slide.animate([{ transform: 'none', opacity: 1 }, { transform: `translateY(${HOME_DY}px)`, opacity: 0 }], o);
   $.empty.animate([{ opacity: 1 }, { opacity: 0 }], o);
   $.lbg.animate([{ opacity: 1 }, { opacity: 0 }], o);
+  journal.fadeOut(o);
+  journal.blur();
   backTimer = setTimeout(() => {
     if (zone !== 'busy') return;
     zone = was;
     app.go('home', { focus: '#library' });
   }, BACK_FADE_MS + BACK_MS);
   return 'back';
-}
-
-// ---------- background: our own line drawing in the PS5's place (§1.1: dim fine lines on the right, static) ----------
-// A twisted ribbon of fine lines down the right side, cool white with a warm band, and a scatter of faint points.
-// Drawn once into a canvas; it never moves, so it costs nothing at idle.
-function illustration() {
-  const W = 1920, H = 1080;
-  const c = Object.assign(document.createElement('canvas'), { width: W, height: H });
-  const g = c.getContext('2d');
-  g.fillStyle = '#000004';
-  g.fillRect(0, 0, W, H);
-  g.lineWidth = 1;
-  const ribbon = (cx, amp, top, len, width, twist, lines, alpha) => {
-    for (let j = 0; j < lines; j++) {
-      const u = (j / (lines - 1)) * 2 - 1;
-      const warm = u > 0.25 && u < 0.6;
-      const a = alpha * (1 - 0.6 * Math.abs(u));
-      g.strokeStyle = warm ? `rgba(190, 100, 62, ${a * 1.6})` : `rgba(190, 200, 228, ${a})`;
-      g.beginPath();
-      for (let k = 0; k <= 40; k++) {
-        const s = k / 40;
-        const x0 = cx + amp * Math.sin(2.4 * s + 0.4), y0 = top + len * s;
-        const w = width * Math.sin(Math.PI * s) * Math.cos(twist * s + 0.6);
-        const x = x0 + u * (w + 22), y = y0 + u * w * 0.35; // + 22: the lines never meet in one bright point
-        k ? g.lineTo(x, y) : g.moveTo(x, y);
-      }
-      g.stroke();
-    }
-  };
-  ribbon(1500, 170, -80, 1240, 380, 2.7, 120, 0.075);
-  ribbon(1690, -150, 60, 940, 210, 3.4, 70, 0.055);
-  let seed = 7;
-  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  for (let k = 0; k < 1400; k++) {
-    const x = 1180 + rnd() * 740, y = rnd() * H;
-    g.fillStyle = `rgba(210, 215, 235, ${0.03 + rnd() * 0.12})`;
-    g.fillRect(x, y, 1.2, 1.2);
-  }
-  // the left stays #000004 so the text reads
-  const fade = g.createLinearGradient(1120, 0, 1420, 0);
-  fade.addColorStop(0, 'rgba(0, 0, 4, 1)');
-  fade.addColorStop(1, 'rgba(0, 0, 4, 0)');
-  g.fillStyle = fade;
-  g.fillRect(0, 0, 1420, H);
-  return c;
 }

@@ -1,6 +1,7 @@
 //! Padwake's Rust host. Each area is its own Tauri plugin (`src/<area>/mod.rs`); the UI calls
 //! `plugin:<area>|<command>` through `ui/host.js`. Later rows edit their area, not this file.
 
+mod cloud;
 mod data;
 mod games;
 mod input;
@@ -17,7 +18,13 @@ use tauri::{Manager, WebviewWindowBuilder};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // started by an update: the previous version is still closing
+    cloud::wait_for_previous();
     if !startup::claim_single_instance() {
+        return;
+    }
+    // a downloaded update installs now and starts itself
+    if cloud::install_at_start() {
         return;
     }
     tauri::Builder::default()
@@ -28,6 +35,7 @@ pub fn run() {
         .plugin(settings::plugin())
         .plugin(startup::plugin())
         .plugin(media::plugin())
+        .plugin(cloud::plugin())
         .setup(|app| {
             // art and media are files in the data dir; the UI loads them through the asset protocol
             app.asset_protocol_scope().allow_directory(data::dir(), true)?;

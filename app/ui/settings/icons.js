@@ -9,6 +9,7 @@ export const ICONS = {
   network: svg('<circle cx="18" cy="18" r="14"/><ellipse cx="18" cy="18" rx="6" ry="14"/><path d="M4.5 13.5h27M4.5 22.5h27"/>'),
   library: svg('<rect x="4" y="4" width="12" height="12" rx="2"/><rect x="20" y="4" width="12" height="12" rx="2"/>' +
     '<rect x="4" y="20" width="12" height="12" rx="2"/><rect x="20" y="20" width="12" height="12" rx="2"/>'),
+  savedData: svg('<path d="M10.5 28h15.5a7 7 0 0 0 1.2-13.9A9.5 9.5 0 0 0 9 13.4 7.3 7.3 0 0 0 10.5 28z"/><path d="M18 24v-8.5M14.2 19.3 18 15.5l3.8 3.8"/>'),
   power: svg('<path d="M18 4v13"/><path d="M10.2 9.2a12 12 0 1 0 15.6 0"/>'),
   system: svg('<path d="M5 9h26M5 18h26M5 27h26"/><circle cx="12" cy="9" r="3.2" fill="#2a262c"/><circle cx="24" cy="18" r="3.2" fill="#2a262c"/><circle cx="15" cy="27" r="3.2" fill="#2a262c"/>'),
 };

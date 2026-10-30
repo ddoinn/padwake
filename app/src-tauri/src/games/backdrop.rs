@@ -65,7 +65,7 @@ fn half(w: u32, h: u32, bgra: &[u8]) -> (u32, u32, Vec<u8>) {
 }
 
 /// The primary screen as top-down BGRA.
-fn grab() -> Result<(u32, u32, Vec<u8>), String> {
+pub(super) fn grab() -> Result<(u32, u32, Vec<u8>), String> {
     unsafe {
         let (w, h) = (GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
         if w <= 0 || h <= 0 {

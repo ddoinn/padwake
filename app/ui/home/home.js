@@ -18,6 +18,7 @@
 // - The Library tile shows the Library's preview below the row (design/ps5/2-library.md §1.3): its count line and first
 //   rows, 116 px below their Library spots, fading in once the slide has ended and the covers are decoded. Home →
 //   Library starts from there, so its covers are already decoded when the Library first draws them.
+// - View opens the Media Gallery (ui/gallery) over Home: the screenshots View took while a game ran.
 
 import { runDistance, runSpeed } from '../input/input.js';
 import { warmControlCenter } from '../control-center/notices.js'; // Control Center's notifications and toasts, kept from boot
@@ -173,6 +174,7 @@ export default {
     if (zone === 'busy') return false;
     if (zone === 'viewer') return viewerAction(name, e);
     if (name === 'y') { app.push('search'); return true; }
+    if (name === 'view' && zone !== 'menu' && zone !== 'info') { app.push('gallery'); return true; } // the Media Gallery
     if (zone === 'menu') return menuAction(name, e);
     if (zone === 'info') return name === 'b' || name === 'a' || name === 'click' ? closeInfo() : false;
     if (name === 'point' || name === 'click') return pointer(name, e);
@@ -1359,6 +1361,7 @@ function openMenu(from) {
   menuItems = [
     ...(from === 'row' ? [['Game hub', () => { closeMenu(); enterHub1(); }]] : []),
     ['Information', () => showInfo(g)],
+    ['Journal', () => { closeMenu(); app.push('journal', { id: g.id }); }],
     ['Refresh art', () => { closeMenu(); host.library.refresh?.(g.id).catch(e => console.warn('refresh', e)); }],
     ...(running === g.id ? [['Close Game', () => { closeMenu(); host.games.close?.(g.id).catch(e => console.warn('close', e)); }]] : []),
   ];

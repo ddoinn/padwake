@@ -1,5 +1,5 @@
 // Settings pages (decision 9): Sound, Controllers, Library, Power and System here; Display and Network in their
-// folders (row A10). Each page is a factory (ctx) → page description; the shapes are at the top of settings.js and
+// folders (row A10); Saved Data and System Software in cloud.js. Each page is a factory (ctx) → page description; the shapes are at the top of settings.js and
 // list.js. Every setting reads and writes the real thing through ctx.host (src-tauri: settings, system, startup).
 
 import { ICONS } from './icons.js';
@@ -7,6 +7,7 @@ import { display } from './display/display.js';
 import { network } from './network/network.js';
 import { padTest } from './controller-test.js';
 export { padTest } from './controller-test.js';
+import { savedData, softwareCategory } from './cloud.js';
 
 export const root = () => ({
   title: 'Settings',
@@ -17,6 +18,7 @@ export const root = () => ({
     { kind: 'link', label: 'Controllers', icon: ICONS.controllers, open: controllers },
     { kind: 'link', label: 'Network', icon: ICONS.network, open: network },
     { kind: 'link', label: 'Library', icon: ICONS.library, open: library },
+    { kind: 'link', label: 'Saved Data', icon: ICONS.savedData, open: savedData },
     { kind: 'link', label: 'Power', icon: ICONS.power, open: power },
     { kind: 'link', label: 'System', icon: ICONS.system, open: system },
   ],
@@ -201,19 +203,26 @@ export function power(ctx) {
   };
 }
 
-// ---------- System: start with Windows, about ----------
+// ---------- System: system software (updates, cloud.js), start with Windows, about ----------
 export function system(ctx) {
-  const s = { withWindows: false, about: {} };
+  const s = { withWindows: false, about: {}, update: null, settings: {} };
   return {
     title: 'System',
     layout: 'two',
     load: async () => {
-      [s.withWindows, s.about] = await Promise.all([
+      [s.withWindows, s.about, s.update, s.settings] = await Promise.all([
         ctx.host.startup.withWindows().catch(() => false),
         ctx.host.system.about().catch(() => ({})),
+        ctx.host.cloud.update().catch(() => null),
+        ctx.host.settings.get(),
       ]);
     },
+    events: {
+      update: v => { s.update = v; ctx.update(); },
+      settings: v => { s.settings = v; ctx.update(); },
+    },
     cats: [
+      softwareCategory(ctx, s),
       {
         label: 'Start-up',
         rows: () => [{

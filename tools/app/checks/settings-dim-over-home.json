@@ -9,7 +9,7 @@
    "why": "Settings is opaque under its dimmed background, so Home doesn't show through the dropdown dim"},
   {"shot": "settings-dropdown-over-home"},
   {"key": "Escape"}, {"wait": 400}, {"key": "Escape"}, {"wait": 400}, {"key": "Escape"}, {"wait": 800},
-  {"key": "ArrowDown"}, {"key": "ArrowDown"}, {"key": "ArrowDown"}, {"key": "ArrowDown"}, {"wait": 300}, {"key": "Enter"}, {"wait": 1200},
+  {"key": "ArrowDown"}, {"key": "ArrowDown"}, {"key": "ArrowDown"}, {"key": "ArrowDown"}, {"key": "ArrowDown"}, {"wait": 300}, {"key": "Enter"}, {"wait": 1200},
   {"key": "Enter"}, {"wait": 500},
   {"assert": "document.querySelector('#screen-settings').classList.contains('dlg')", "why": "Power's Sleep question is open over Home"},
   {"shot": "settings-dialog-over-home"},

@@ -1,0 +1,62 @@
+/* Media Gallery (row A17): the Game Library's header and grid language (library.css), 16:9 thumbnails. */
+
+#screen-gallery { background: #000004; }
+
+/* header (fixed): glyph 41 × 36 at (68, 70), "Media Gallery" x 172 cap 77, 31 px */
+#screen-gallery .ghead { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+#screen-gallery .gicon svg { position: absolute; left: 68px; top: 70px; width: 41px; height: 36px; }
+#screen-gallery .gtitle { position: absolute; left: 172px; top: 72px; font-size: 31px; line-height: 31px; font-weight: 400; white-space: nowrap; }
+
+/* the scrolled part, clipped at y 260 as the Library's; content coordinates are screen coordinates */
+#screen-gallery .gview { position: absolute; left: 0; right: 0; top: 260px; bottom: 0; overflow: hidden; z-index: 1; }
+#screen-gallery .gcontent { position: absolute; left: 0; top: -260px; width: 1920px; height: 1080px; will-change: transform; }
+#screen-gallery .gcount { position: absolute; left: 172px; top: 284px; font-size: 25px; line-height: 25px; font-weight: 400; white-space: nowrap; }
+
+/* thumbnails: 376 × 212; nothing draws until decoded */
+#screen-gallery .gcard { position: absolute; left: 0; top: 0; width: 376px; height: 212px; overflow: hidden; border-radius: 2px;
+  background: #0d0e14; }
+#screen-gallery .gcard img { display: block; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 200ms linear; }
+#screen-gallery .gcard img.in { opacity: 1; }
+#screen-gallery .gcard .shade { position: absolute; left: 0; right: 0; bottom: 0; height: 110px; opacity: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, .78), rgba(0, 0, 0, .45) 50%, rgba(0, 0, 0, 0)); transition: opacity 200ms linear; }
+#screen-gallery .gcard .cap { position: absolute; left: 16px; right: 16px; bottom: 12px; opacity: 0; transition: opacity 200ms linear; }
+#screen-gallery .gcard.focus .shade, #screen-gallery .gcard.focus .cap { opacity: 1; }
+#screen-gallery .gcard .n { font-size: 21px; line-height: 29px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#screen-gallery .gcard .d { font-size: 17px; line-height: 23px; color: #bdbdbd; white-space: nowrap; }
+
+/* the focus ring: 3 px, 3 px outside the thumbnail (outer box ± 6), radius 4; static */
+#screen-gallery .gring { position: absolute; left: 0; top: 0; width: 388px; height: 224px; border: 3px solid rgba(255, 255, 255, .8);
+  border-radius: 4px; pointer-events: none; }
+
+#screen-gallery .gempty { display: none; position: absolute; left: 172px; top: 338px; width: 1100px; z-index: 1; }
+#screen-gallery.none .gempty { display: block; }
+#screen-gallery.none .gview { display: none; }
+#screen-gallery .gempty .msg { font-size: 31px; line-height: 42px; font-weight: 400; }
+#screen-gallery .gempty .sub { margin-top: 12px; font-size: 25px; line-height: 36px; color: #bdbdbd; }
+
+/* ---------- the viewer: as Home's hub viewer (home.css "the viewer") ---------- */
+#screen-gallery .gv { position: absolute; inset: 0; z-index: 5; visibility: hidden; }
+#screen-gallery .gv.on { visibility: visible; }
+#screen-gallery .gdim { position: absolute; inset: 0; background: #000; opacity: 0; will-change: opacity; }
+#screen-gallery .gpic { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; opacity: 0;
+  will-change: transform, opacity; }
+#screen-gallery .gpic img { display: block; width: 100%; height: 100%; object-fit: contain; }
+#screen-gallery .gpic img:not([src]) { visibility: hidden; }
+#screen-gallery .gvhead { position: absolute; left: 0; right: 0; bottom: 0; height: 180px; opacity: 0; z-index: 3; will-change: opacity;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0), rgba(0, 0, 0, .5)); }
+#screen-gallery .gvhead span { position: absolute; bottom: 40px; font-size: 24px; line-height: 32px; white-space: nowrap; }
+#screen-gallery .gvhead .gvname { left: 56px; color: #fff; }
+#screen-gallery .gvhead .gvcount { right: 56px; color: #bab9be; }
+
+/* ---------- delete question: Settings' dialog (settings.css .sdlg) ---------- */
+#screen-gallery .gdlg { position: absolute; inset: 0; z-index: 10; display: none; background: rgba(0, 0, 4, .86); }
+#screen-gallery.dlg .gdlg { display: block; }
+#screen-gallery .gdlg h2 { position: absolute; left: 160px; right: 160px; top: 330px; margin: 0; text-align: center;
+  font: 300 46px/1.15 'Open Sans', sans-serif; }
+#screen-gallery .gdlg p { position: absolute; left: 360px; right: 360px; top: 420px; margin: 0; text-align: center;
+  font: 300 31px/42px 'Open Sans', sans-serif; color: #d8d4dc; }
+#screen-gallery .gdlg .btns { position: absolute; left: 0; right: 0; top: 586px; display: flex; justify-content: center; gap: 40px; }
+#screen-gallery .pill { position: relative; width: 388px; height: 72px; border-radius: 36px; background: #181826; color: #fff;
+  font: 700 30px/72px 'Open Sans', sans-serif; text-align: center; transition: background-color 150ms cubic-bezier(0, 0, .2, 1), color 150ms cubic-bezier(0, 0, .2, 1); }
+#screen-gallery .pill.focus { background: #fdfdfd; color: #090909; }
+#screen-gallery .pill.focus::after { content: ''; position: absolute; inset: -7px; border-radius: 43px; border: 3px solid rgba(255, 255, 255, .8); }

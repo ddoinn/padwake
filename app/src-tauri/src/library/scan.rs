@@ -129,7 +129,7 @@ impl Pass {
 }
 
 /// Matches the folders against the library. Known folders keep their entry (and id); quiet new folders with an exe
-/// join, taking back the id and playtime of a played game that was removed from the same folder (`kept`); entries
+/// join, taking back the id, playtime and journal of a game that was removed from the same folder (`kept`); entries
 /// whose folder is gone leave. An unplayed game's exe is picked again, as sync.ps1 does for games added mid-install.
 pub fn pass(known: &[Game], kept: &[Game], folders: &[PathBuf], now: SystemTime, quiet: Duration) -> Pass {
     let mut by_folder: HashMap<String, &Game> = known.iter().map(|g| (key(&g.folder), g)).collect();
@@ -156,7 +156,11 @@ pub fn pass(known: &[Game], kept: &[Game], folders: &[PathBuf], now: SystemTime,
             continue;
         };
         let name = folder.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        let back = kept.iter().find(|k| key(&k.folder) == key(folder));
+        // the same folder, or a folder of the same name (a games folder moved, or a game restored from a backup)
+        let back = kept
+            .iter()
+            .find(|k| key(&k.folder) == key(folder))
+            .or_else(|| kept.iter().find(|k| k.folder.file_name().is_some_and(|n| n.eq_ignore_ascii_case(&name))));
         let id = match back {
             Some(k) => k.id.clone(),
             None => unique(&slug(&name), &taken),
@@ -164,8 +168,13 @@ pub fn pass(known: &[Game], kept: &[Game], folders: &[PathBuf], now: SystemTime,
         taken.insert(id.clone());
         let mut g = Game { id, name, folder: folder.clone(), exe, added_at: Some(ms(now)), ..Default::default() };
         if let Some(k) = back {
+            // the journal's entry comes back whole, with the art it kept until enrichment fetches it again
             g.playtime_sec = k.playtime_sec;
             g.last_played = k.last_played;
+            g.first_played = k.first_played;
+            g.sessions = k.sessions;
+            g.journal = k.journal.clone();
+            g.art = k.art.clone();
         }
         p.joined.push(g.id.clone());
         p.games.push(g);
@@ -313,8 +322,28 @@ mod tests {
         let gone = scan(&played, &[]);
         assert_eq!(gone.left.iter().map(|g| g.id.as_str()).collect::<Vec<_>>(), ["hades"]);
         t.file("Hades/x.exe", 1);
-        let back = scan(&gone.games, &gone.left);
+        let mut kept = gone.left.clone();
+        kept[0].sessions = 4;
+        kept[0].journal.rating = Some(5);
+        let back = scan(&gone.games, &kept);
         let hades = back.games.iter().find(|g| g.id == "hades").unwrap();
-        assert_eq!(hades.playtime_sec, 3600);
+        assert_eq!((hades.playtime_sec, hades.sessions, hades.journal.rating), (3600, 4, Some(5)));
+    }
+
+    #[test]
+    fn a_restored_game_comes_back_by_folder_name() {
+        let t = Tmp::new("restored");
+        t.file("hollow knight/x.exe", 1);
+        // from a backup made on another PC: only the folder's name is known
+        let kept = [Game {
+            id: "hollow-knight".into(),
+            name: "Hollow Knight".into(),
+            folder: PathBuf::from("Hollow Knight"),
+            playtime_sec: 900,
+            ..Default::default()
+        }];
+        let p = pass(&[], &kept, &folders(&t.0).unwrap(), SystemTime::now(), Duration::ZERO);
+        assert_eq!(p.joined, ["hollow-knight"]);
+        assert_eq!((p.games[0].playtime_sec, p.games[0].restored_at), (900, None));
     }
 }

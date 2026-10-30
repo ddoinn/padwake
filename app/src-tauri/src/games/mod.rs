@@ -1,6 +1,8 @@
 //! Game sessions (rows A1, A5): launch, track, Guide over a running game, back to it, Close Game, and playtime.
 //! One session at a time. `start` is the API Media (row A12) reuses for Edge app windows (`Kind::Media`).
 //! - Launch: the command runs in a job object (`session.rs`); the app sleeps (hidden, web view suspended) meanwhile.
+//!   A game doesn't show the desktop while it loads: the app stays up on Home's navy launch screen until another window
+//!   fills the screen (`cover`), then sleeps.
 //! - Tracking is an OS wait on the job, then on processes run from the game's folder (launcher stubs). A foreground hook
 //!   (`front.rs`) notes the game's window when it first comes to the front: "Ready to play".
 //! - Guide while the game is in front: the pad thread asks `guide` before the page. A tap uses a still of the screen
@@ -12,6 +14,7 @@
 //!   after 5 s. When the session ends: playtime and last played (`library::record_session`), then Home.
 
 mod backdrop;
+mod capture;
 mod front;
 pub mod session;
 mod window;
@@ -69,6 +72,9 @@ const OVER_READY_WAIT: Duration = Duration::from_millis(200);
 /// The screen copied as Guide went down over the game, when, and how long the copy took. A tap uses it up to this old.
 static PRESS_STILL: Mutex<Option<(Instant, Result<Duration, String>)>> = Mutex::new(None);
 const PRESS_STILL_FRESH: Duration = Duration::from_millis(1000);
+/// While a game loads, the launch screen stays up at most this long (a game that never fills the screen: windowed)
+const COVER_MAX: Duration = Duration::from_secs(60);
+const COVER_POLL: Duration = Duration::from_millis(100);
 
 fn live() -> MutexGuard<'static, Option<Live>> {
     LIVE.lock().unwrap_or_else(|e| e.into_inner())
@@ -106,7 +112,7 @@ pub struct Session {
 
 pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("games")
-        .invoke_handler(tauri::generate_handler![launch, close, resume, session, backdrop, over_ready])
+        .invoke_handler(tauri::generate_handler![launch, close, resume, session, backdrop, over_ready, captures, delete_capture])
         .setup(|app, _api| {
             let app = app.clone();
             front::start(move |hwnd, pid| came_to_front(&app, hwnd, pid));
@@ -136,6 +142,7 @@ pub fn start<R: Runtime>(
     mut cmd: Command,
     folder: Option<PathBuf>,
 ) -> Result<(), String> {
+    let started = Instant::now();
     let tracked = {
         let mut live = live();
         if let Some(other) = live.as_ref() {
@@ -159,7 +166,7 @@ pub fn start<R: Runtime>(
             kind,
             id: id.to_string(),
             name: name.to_string(),
-            started: Instant::now(),
+            started,
             started_at: now_ms(),
             tracked: tracked.clone(),
             front: Front::Game,
@@ -170,7 +177,12 @@ pub fn start<R: Runtime>(
     };
     log(&format!("{id} started (pid {}, folder {:?})", tracked.pid, tracked.folder));
     emit(app, id, kind, "running", None);
-    sleep(app);
+    // Media's Edge window is up in a moment; a game may take a while, so the launch screen covers the desktop
+    if kind == Kind::Game {
+        cover(app, id, started);
+    } else {
+        sleep(app);
+    }
 
     let handle = app.clone();
     let waiter = std::thread::Builder::new().name("session-wait".into()).spawn(move || {
@@ -268,6 +280,18 @@ pub fn guide_down<R: Runtime>(app: &AppHandle<R>) {
     *PRESS_STILL.lock().unwrap_or_else(|e| e.into_inner()) = Some((Instant::now(), took));
 }
 
+/// View from the pad thread: while a game's window is in front (the app asleep), a screenshot (`capture.rs`). True if
+/// it took one; otherwise the page gets View as usual.
+pub fn view_pressed<R: Runtime>(app: &AppHandle<R>) -> bool {
+    let (id, name) = match live().as_ref() {
+        Some(l) if l.front == Front::Game && l.kind == Kind::Game => (l.id.clone(), l.name.clone()),
+        _ => return false,
+    };
+    let tile = crate::library::get(&id).and_then(|g| g.art.tile);
+    capture::take(app, &id, &name, tile);
+    true
+}
+
 /// Guide from the pad thread, before the page gets it. While a session's window is in front this wakes the app above
 /// it and returns true; the page then gets `game` {state: "over"} and the `guide` event itself.
 pub fn guide<R: Runtime>(app: &AppHandle<R>, kind: &str) -> bool {
@@ -324,6 +348,43 @@ pub fn guide<R: Runtime>(app: &AppHandle<R>, kind: &str) -> bool {
         Err(e) => log(&format!("guide {kind} over {id}: no still ({e})")),
     }
     true
+}
+
+/// The game is loading: the app stays up on the launch screen (Home's navy, design/ps5/1-home.md §1.10) instead of
+/// hiding at once and showing the desktop. It sleeps when another window fills the screen (the game, or anything it
+/// starts) or after `COVER_MAX`. Guide meanwhile brings the app over the game as always, which ends the wait; so does
+/// the session ending. Polls the game's window (noted when it first came to the front; the "Ready to play" toast may
+/// take the foreground from it) and the foreground window, at most for `COVER_MAX`, only while a game starts.
+fn cover<R: Runtime>(app: &AppHandle<R>, id: &str, started: Instant) {
+    // still this session, and the game (not the app over it) meant to be in front
+    let waiting = move || matches!(live().as_ref(), Some(l) if l.started == started && l.front == Front::Game);
+    let (handle, id) = (app.clone(), id.to_string());
+    let spawned = std::thread::Builder::new().name("launch-cover".into()).spawn(move || loop {
+        std::thread::sleep(COVER_POLL);
+        if !waiting() {
+            return;
+        }
+        let game = live().as_ref().and_then(|l| l.window);
+        let filled = game.and_then(window::fills_screen).or_else(window::other_fills_screen);
+        if filled.is_none() && started.elapsed() < COVER_MAX {
+            continue;
+        }
+        let ms = started.elapsed().as_millis();
+        match filled {
+            Some(w) => log(&format!("{id} fills the screen after {ms} ms (window {w:#x}): the launch screen goes")),
+            None => log(&format!("{id}: nothing filled the screen in {} s; the launch screen goes", COVER_MAX.as_secs())),
+        }
+        sleep(&handle);
+        // Guide or the game's end may have woken the app while it went to sleep: show it again
+        if !waiting() {
+            wake(&handle);
+        }
+        return;
+    });
+    if let Err(e) = spawned {
+        log(&format!("launch cover thread: {e}"));
+        sleep(app);
+    }
 }
 
 /// The session ended: playtime and last played for a game, then the app comes back and Home follows `exited`.
@@ -403,6 +464,18 @@ fn over_ready() {
 #[tauri::command]
 fn session() -> Option<Session> {
     current()
+}
+
+/// Screenshots taken with View, newest first: [{game, name, path, thumb, takenAt}].
+#[tauri::command]
+async fn captures() -> Vec<capture::Capture> {
+    let names = |id: &str| crate::library::get(id).or_else(|| crate::library::kept(id)).map(|g| g.name);
+    tauri::async_runtime::spawn_blocking(move || capture::list(&names)).await.unwrap_or_default()
+}
+
+#[tauri::command]
+fn delete_capture(path: PathBuf) -> Result<(), String> {
+    capture::delete(&path)
 }
 
 /// The still taken as Guide was pressed over the game, as a BMP: `size` "small" (half size, sent first) or "full".

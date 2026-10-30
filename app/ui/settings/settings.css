@@ -115,6 +115,19 @@
 #screen-settings .sdlg h2 { position: absolute; left: 160px; right: 160px; top: 330px; text-align: center; font: 300 46px/1.15 'Open Sans', sans-serif; }
 #screen-settings .sdlg p { position: absolute; left: 360px; right: 360px; top: 420px; text-align: center; font: 300 31px/42px 'Open Sans', sans-serif; color: #d8d4dc; }
 #screen-settings .sdlg .btns { position: absolute; left: 0; right: 0; top: 586px; display: flex; justify-content: center; gap: 40px; }
+/* a code to type on another device (GitHub sign-in): large, spaced, on a soft plate */
+#screen-settings .sdlg.with-code h2 { top: 250px; }
+#screen-settings .sdlg.with-code p { top: 340px; }
+#screen-settings .sdlg .code { position: absolute; left: 50%; top: 470px; transform: translateX(-50%); padding: 14px 44px 16px;
+  border-radius: 18px; background: rgba(255, 255, 255, .07); font: 600 72px/1.1 'Open Sans', sans-serif; letter-spacing: .12em;
+  padding-right: calc(44px - .12em); /* the spacing after the last letter */
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+#screen-settings .sdlg.with-code .btns { top: 660px; }
+#screen-settings .sdlg p { white-space: pre-line; }
+/* a longer text (release notes): the title moves up and the buttons down */
+#screen-settings .sdlg.tall h2 { top: 220px; }
+#screen-settings .sdlg.tall p { top: 310px; }
+#screen-settings .sdlg.tall .btns { top: 670px; }
 #screen-settings .pill { position: relative; width: 388px; height: 72px; border-radius: 36px; background: #181826; color: #fff;
   font: 700 30px/72px 'Open Sans', sans-serif; text-align: center; transition: background-color 150ms var(--ease-out), color 150ms var(--ease-out); }
 #screen-settings .pill.focus { background: #fdfdfd; color: #090909; }

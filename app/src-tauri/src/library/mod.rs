@@ -2,6 +2,8 @@
 //! - A watcher thread checks the root every 30 s, never while a game runs. New folders join once nothing in them changed
 //!   for 3 min (`PADWAKE_QUIET_SEC` overrides); removed folders leave, but a played game's id and playtime are
 //!   kept for when its folder comes back.
+//! - The journal (Library → Journal): every played or reviewed game, with its time, sessions and the player's rating,
+//!   status, progress and note. A removed folder's entry stays, with its art (trailer, music and screenshots go).
 //! - Each game is enriched once (`steam.rs`): Steam store info, SteamGridDB art, news, trailer and music.
 //! - The list is saved in `library.json` in the data dir, with art and media in `library\<id>\`, and every change is
 //!   sent to the page as the `library` event (the full list). Log: `library.log`.
@@ -10,6 +12,7 @@
 //! - `padwake.exe --sync-once [--root <dir>]` runs one pass without a window; `--watch` keeps watching.
 
 mod art;
+pub mod portable;
 mod scan;
 mod steam;
 mod trailer;
@@ -43,6 +46,16 @@ pub struct Game {
     pub news: Vec<News>,
     pub playtime_sec: u64,
     pub last_played: Option<u64>,
+    /// when the first session recorded by the app started, and how many there were
+    pub first_played: Option<u64>,
+    pub sessions: u32,
+    pub journal: Journal,
+    /// only on an entry whose folder is gone (the journal keeps it): when it went
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub removed_at: Option<u64>,
+    /// only on a removed entry that came from a backup (`portable.rs`): when it was restored
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub restored_at: Option<u64>,
     pub added_at: Option<u64>,
     pub steam_app_id: Option<u64>,
     /// when store info and art last landed; `None` = still to fetch
@@ -62,6 +75,53 @@ pub struct Art {
     pub cover: Option<PathBuf>,
 }
 
+/// What the player says about a game. All optional; any field set puts the game in the journal.
+#[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
+#[serde(default)]
+pub struct Journal {
+    /// 1–5 stars
+    pub rating: Option<u8>,
+    pub status: Option<Status>,
+    /// how much of the game is done, 0–100 %
+    pub progress: Option<u8>,
+    pub note: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum Status {
+    Playing,
+    /// the story is done
+    Finished,
+    /// 100 %
+    Completed,
+    Paused,
+    Dropped,
+}
+
+pub const NOTE_MAX: usize = 280;
+
+impl Journal {
+    pub fn is_empty(&self) -> bool {
+        *self == Journal::default()
+    }
+
+    /// Stars 1–5 (0 clears), progress up to 100, the note trimmed to `NOTE_MAX` characters (empty clears).
+    fn cleaned(mut self) -> Journal {
+        self.rating = self.rating.filter(|&r| r > 0).map(|r| r.min(5));
+        self.progress = self.progress.map(|p| p.min(100));
+        self.note = self.note.map(|n| n.trim().chars().take(NOTE_MAX).collect::<String>()).filter(|n| !n.is_empty());
+        self
+    }
+}
+
+impl Game {
+    /// In the journal: played here, or reviewed.
+    pub fn in_journal(&self) -> bool {
+        self.playtime_sec > 0 || self.last_played.is_some() || !self.journal.is_empty()
+    }
+}
+
 /// A Steam news item: plain text, `contents` about 300 characters.
 #[derive(Serialize, Deserialize, Clone, Default, Debug)]
 #[serde(default)]
@@ -72,7 +132,7 @@ pub struct News {
     pub contents: String,
 }
 
-/// `library.json`: the games, plus played games whose folder is gone (only id, folder and playtime).
+/// `library.json`: the games, plus journal entries whose folder is gone (`kept`: everything but the media).
 #[derive(Serialize, Deserialize, Default)]
 #[serde(default)]
 struct Saved {
@@ -96,7 +156,7 @@ fn state() -> MutexGuard<'static, Saved> {
 
 pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("library")
-        .invoke_handler(tauri::generate_handler![list, refresh, rescan])
+        .invoke_handler(tauri::generate_handler![list, refresh, rescan, journal, review, forget])
         .setup(|app, _api| {
             load();
             let app = app.clone();
@@ -119,6 +179,11 @@ pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
 /// One game by id.
 pub fn get(id: &str) -> Option<Game> {
     state().games.iter().find(|g| g.id == id).cloned()
+}
+
+/// One journal entry whose folder is gone, by id.
+pub fn kept(id: &str) -> Option<Game> {
+    state().kept.iter().find(|g| g.id == id).cloned()
 }
 
 #[tauri::command]
@@ -145,16 +210,81 @@ fn rescan() -> Vec<Game> {
     list()
 }
 
-/// Row A5: a session of `secs` ended at `ended_at` (Unix ms). Adds it to the game's playtime, sets `lastPlayed` and
-/// sends the list. False if there is no such game.
-#[allow(dead_code)] // row A5 calls it
+/// Row A5: a session of `secs` ended at `ended_at` (Unix ms). Adds it to the game's playtime and sessions, sets
+/// `lastPlayed` (and `firstPlayed` the first time) and sends the list. False if there is no such game.
 pub fn record_session(id: &str, secs: u64, ended_at: u64) -> bool {
     let mut s = state();
     let Some(g) = s.games.iter_mut().find(|g| g.id == id) else { return false };
     g.playtime_sec += secs;
     g.last_played = Some(ended_at);
+    g.sessions += 1;
+    g.first_played.get_or_insert(ended_at.saturating_sub(secs * 1000));
     changed(&s);
     true
+}
+
+/// The journal: the library's played or reviewed games, then the kept ones whose folder is gone (`removedAt` set).
+#[tauri::command]
+fn journal() -> Vec<Game> {
+    journal_list()
+}
+
+fn journal_list() -> Vec<Game> {
+    let s = state();
+    s.games.iter().filter(|g| g.in_journal()).chain(&s.kept).cloned().collect()
+}
+
+/// Sets a game's journal, all of it (a field left out is cleared); kept games too. Resolves with the entry; the
+/// `library` event follows.
+#[tauri::command]
+fn review(id: String, journal: Journal) -> Result<Game, String> {
+    set_journal(&id, journal)
+}
+
+fn set_journal(id: &str, journal: Journal) -> Result<Game, String> {
+    let mut guard = state();
+    let s = &mut *guard;
+    let g = s.games.iter_mut().chain(s.kept.iter_mut()).find(|g| g.id == id).ok_or_else(|| format!("no game {id}"))?;
+    g.journal = journal.cleaned();
+    let g = g.clone();
+    changed(s);
+    Ok(g)
+}
+
+/// Takes a removed game out of the journal, with its art. A game still in the library can't be forgotten.
+#[tauri::command]
+fn forget(id: String) -> Result<(), String> {
+    let mut s = state();
+    let before = s.kept.len();
+    s.kept.retain(|k| k.id != id);
+    if s.kept.len() == before {
+        return Err(format!("{id} is not a removed game"));
+    }
+    changed(&s);
+    drop(s);
+    let _ = std::fs::remove_dir_all(game_dir(&id));
+    log(&format!("forgot {id}"));
+    Ok(())
+}
+
+// ---------- backup (the cloud area) ----------
+
+/// The library and the journal's removed games, as backup entries.
+pub fn backup_entries() -> Vec<portable::Entry> {
+    let s = state();
+    portable::export(&s.games, &s.kept)
+}
+
+/// Merges a backup into the library and the journal; saves and sends the list if anything changed.
+pub fn restore(entries: &[portable::Entry]) -> portable::Restored {
+    let mut guard = state();
+    let s = &mut *guard;
+    let r = portable::merge(&mut s.games, &mut s.kept, entries, scan::ms(SystemTime::now()));
+    if r != portable::Restored::default() {
+        changed(s);
+        log(&format!("restored from backup: {} updated, {} added to the journal", r.updated, r.added));
+    }
+    r
 }
 
 // ---------- saving ----------
@@ -215,7 +345,7 @@ fn load() {
         Err(_) => Saved::default(),
     };
     let root = data_root();
-    for g in &mut saved.games {
+    for g in saved.games.iter_mut().chain(saved.kept.iter_mut()) {
         media_paths(g).for_each(|p| *p = to_absolute(p, &root));
     }
     *state() = saved;
@@ -224,11 +354,11 @@ fn load() {
 /// Saves the library (art and media paths relative to the data dir) and sends it to the page (absolute).
 fn changed(s: &Saved) {
     let root = data_root();
-    let mut games = s.games.clone();
-    for g in &mut games {
+    let (mut games, mut kept) = (s.games.clone(), s.kept.clone());
+    for g in games.iter_mut().chain(kept.iter_mut()) {
         media_paths(g).for_each(|p| *p = to_relative(p, &root));
     }
-    match serde_json::to_vec_pretty(&Saved { games, kept: s.kept.clone() }) {
+    match serde_json::to_vec_pretty(&Saved { games, kept }) {
         Ok(text) => {
             if let Err(e) = write_file(&library_file(), &text) {
                 log(&format!("saving library.json: {e}"));
@@ -239,6 +369,7 @@ fn changed(s: &Saved) {
     if let Some(notify) = NOTIFY.get() {
         notify(&s.games);
     }
+    crate::cloud::library_changed();
 }
 
 /// Writes a file whole: to a temp name first, then renamed over the old one.
@@ -369,19 +500,15 @@ fn apply(p: &scan::Pass) {
     }
     for g in &p.left {
         let cur = s.games.iter().find(|c| c.id == g.id).unwrap_or(g).clone();
-        if cur.playtime_sec > 0 || cur.last_played.is_some() {
-            let keep = Game {
-                id: cur.id.clone(),
-                name: cur.name.clone(),
-                folder: cur.folder.clone(),
-                playtime_sec: cur.playtime_sec,
-                last_played: cur.last_played,
-                ..Default::default()
-            };
+        if cur.in_journal() {
+            let keep = kept_entry(cur.clone(), scan::ms(SystemTime::now()));
+            prune(&game_dir(&g.id), &keep);
             s.kept.push(keep);
+            log(&format!("left: {} ({}); kept in the journal", cur.name, cur.folder.display()));
+        } else {
+            let _ = std::fs::remove_dir_all(game_dir(&g.id));
+            log(&format!("left: {} ({})", cur.name, cur.folder.display()));
         }
-        let _ = std::fs::remove_dir_all(game_dir(&g.id));
-        log(&format!("left: {} ({})", cur.name, cur.folder.display()));
     }
     for id in &p.joined {
         if let Some(g) = games.iter().find(|g| &g.id == id) {
@@ -396,6 +523,32 @@ fn apply(p: &scan::Pass) {
     s.kept.retain(|k| !games.iter().any(|g| g.id == k.id));
     s.games = games;
     changed(&s);
+}
+
+/// What the journal keeps of a game whose folder went: everything but its media (trailer, music, screenshots, news).
+fn kept_entry(g: Game, now: u64) -> Game {
+    Game { screenshots: Vec::new(), trailer: None, music: None, news: Vec::new(), removed_at: Some(now), ..g }
+}
+
+/// Deletes everything in a game's art folder that `keep` doesn't point at; the folder goes too once empty.
+fn prune(dir: &Path, keep: &Game) {
+    let mut keep = keep.clone();
+    let wanted: Vec<PathBuf> = media_paths(&mut keep).map(|p| p.clone()).collect();
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let mut left = 0;
+    for e in entries.flatten() {
+        let p = e.path();
+        if wanted.contains(&p) {
+            left += 1;
+        } else if p.is_dir() {
+            let _ = std::fs::remove_dir_all(&p);
+        } else {
+            let _ = std::fs::remove_file(&p);
+        }
+    }
+    if left == 0 {
+        let _ = std::fs::remove_dir(dir);
+    }
 }
 
 /// Enriches every game that still needs it and wasn't tried this session. Stops when a game starts.
@@ -596,8 +749,62 @@ mod tests {
         assert!(record_session("session-test", 90, 1_793_196_309_000));
         let g = get("session-test").unwrap();
         assert_eq!((g.playtime_sec, g.last_played), (150, Some(1_793_196_309_000)));
+        // the first session recorded: it started 90 s before it ended
+        assert_eq!((g.sessions, g.first_played), (1, Some(1_793_196_219_000)));
+        assert!(record_session("session-test", 30, 1_793_200_000_000));
+        let g = get("session-test").unwrap();
+        assert_eq!((g.sessions, g.first_played, g.playtime_sec), (2, Some(1_793_196_219_000), 180));
         assert!(!record_session("no-such-game", 90, 0));
         state().games.retain(|g| g.id != "session-test");
+    }
+
+    #[test]
+    fn reviews_are_cleaned_and_join_the_journal() {
+        state().games.push(Game { id: "review-test".into(), name: "Review Test".into(), ..Default::default() });
+        assert!(!journal_list().iter().any(|g| g.id == "review-test"), "never played, never reviewed");
+        let note = format!("  {}  ", "x".repeat(400));
+        let j = Journal { rating: Some(9), status: Some(Status::Completed), progress: Some(140), note: Some(note) };
+        let g = set_journal("review-test", j).unwrap();
+        assert_eq!((g.journal.rating, g.journal.progress), (Some(5), Some(100)));
+        assert_eq!(g.journal.note.as_deref().map(str::len), Some(NOTE_MAX));
+        assert!(journal_list().iter().any(|g| g.id == "review-test"));
+        // 0 stars and a blank note clear them; with nothing left it leaves the journal
+        let g = set_journal("review-test", Journal { rating: Some(0), note: Some("  ".into()), ..Default::default() }).unwrap();
+        assert!(g.journal.is_empty());
+        assert!(!journal_list().iter().any(|g| g.id == "review-test"));
+        assert!(set_journal("no-such-game", Journal::default()).is_err());
+        state().games.retain(|g| g.id != "review-test");
+    }
+
+    #[test]
+    fn the_journal_keeps_a_removed_game_and_its_art_only() {
+        let dir = std::env::temp_dir().join(format!("ch-lib-prune-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("shots")).unwrap();
+        for f in ["tile.jpg", "background.jpg", "trailer.mp4", "music.m4a", "shot1.jpg", "shots/x.jpg"] {
+            std::fs::write(dir.join(f), b"x").unwrap();
+        }
+        let g = Game {
+            id: "kept".into(),
+            playtime_sec: 3600,
+            journal: Journal { rating: Some(4), ..Default::default() },
+            art: Art { tile: Some(dir.join("tile.jpg")), background: Some(dir.join("background.jpg")), ..Default::default() },
+            screenshots: vec![dir.join("shot1.jpg")],
+            trailer: Some(dir.join("trailer.mp4")),
+            music: Some(dir.join("music.m4a")),
+            news: vec![News::default()],
+            ..Default::default()
+        };
+        let keep = kept_entry(g, 1_793_196_309_000);
+        assert_eq!(keep.removed_at, Some(1_793_196_309_000));
+        assert!(keep.trailer.is_none() && keep.music.is_none() && keep.screenshots.is_empty() && keep.news.is_empty());
+        assert_eq!((keep.playtime_sec, keep.journal.rating), (3600, Some(4)));
+        prune(&dir, &keep);
+        let mut left: Vec<_> = std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.file_name().into_string().unwrap()).collect();
+        left.sort();
+        assert_eq!(left, ["background.jpg", "tile.jpg"]);
+        // nothing to keep: the folder goes
+        prune(&dir, &Game::default());
+        assert!(!dir.exists());
     }
 
     #[test]

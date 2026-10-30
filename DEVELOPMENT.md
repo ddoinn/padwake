@@ -24,6 +24,9 @@ From the repository root:
 ```powershell
 node tools/app/ui-probe.mjs --query "scene=settings&settings=controllers/0/r/1" tools/app/checks/controller-test.json
 node tools/app/ui-probe.mjs --query scene=home tools/app/checks/settings-dim-over-home.json
+node tools/app/ui-probe.mjs --query scene=home tools/app/checks/cloud.json
+node tools/app/ui-probe.mjs --query "scene=home&captures=9" tools/app/checks/gallery.json
+node tools/app/ui-probe.mjs --query scene=home tools/app/checks/journal.json
 ```
 
 The UI probe uses headless Edge and mock host data. Set EDGE to your Edge executable; its default path and the capture/input tools target the Windows development laptop.

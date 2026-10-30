@@ -1,6 +1,6 @@
 // Each area is an inlined plugin. Its commands are read from the `generate_handler![...]` in its mod.rs, and its
 // default permission allows them all, so a row adding a command only edits its own area.
-const AREAS: [&str; 7] = ["input", "games", "library", "system", "settings", "startup", "media"];
+const AREAS: [&str; 8] = ["input", "games", "library", "system", "settings", "startup", "media", "cloud"];
 
 fn main() {
     let mut attrs = tauri_build::Attributes::new();
