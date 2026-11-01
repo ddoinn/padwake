@@ -51,6 +51,9 @@
 #screen-journal .progress .fill { height: 100%; background: #fff; transition: width 120ms cubic-bezier(0, 0, .2, 1); }
 #screen-journal .progress .track.full .fill { background: #f2c75c; }
 #screen-journal .progress .v { width: 130px; text-align: right; }
+/* the app's own figure: a softer fill, and where it came from under the bar */
+#screen-journal .progress .track.auto .fill { background: rgba(255, 255, 255, .62); }
+#screen-journal .progress .src { position: absolute; left: 0; top: 62px; font-size: 19px; line-height: 22px; color: #8a8990; white-space: nowrap; }
 
 /* the note: label on top, the text under it in two lines */
 #screen-journal .jprow.tall { height: 136px; }

@@ -286,6 +286,8 @@ pub struct Found {
     pub trailer: Option<PathBuf>,
     pub music: Option<PathBuf>,
     pub news: Vec<News>,
+    /// the store's achievement count, 0 when it lists none
+    pub achievements_total: u32,
     pub problems: Vec<String>,
 }
 
@@ -315,7 +317,7 @@ pub fn enrich(http: &Http, game: &Game, dir: &Path, ffmpeg: Option<&Path>, stop:
         return Err(format!("Steam details failed for {id}"));
     }
     std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-    let mut f = Found { steam_app_id: id, ..Default::default() };
+    let mut f = Found { steam_app_id: id, achievements_total: achievements_in(d), ..Default::default() };
     f.name = d["name"].as_str().unwrap_or(&game.name).replace(['™', '®'], "").trim().to_string();
     // some About sections are only pictures (Cyberpunk 2077): then the short description
     f.description = [&d["about_the_game"], &d["short_description"]]
@@ -440,6 +442,20 @@ pub fn enrich(http: &Http, game: &Game, dir: &Path, ffmpeg: Option<&Path>, stop:
         None => f.problems.push("trailer: the store has no movie".into()),
     }
     Ok(f)
+}
+
+/// The store's achievement count for an app (0 when it lists none), for games enriched before the count was kept.
+pub fn achievements_total(http: &Http, id: u64) -> Result<u32, String> {
+    let details = http.json(&format!("{STORE}/appdetails?appids={id}&l=english&cc=US&filters=achievements"))?;
+    let d = &details[id.to_string()];
+    if d["success"].as_bool() != Some(true) {
+        return Err(format!("Steam details failed for {id}"));
+    }
+    Ok(achievements_in(&d["data"]))
+}
+
+fn achievements_in(d: &Value) -> u32 {
+    d["achievements"]["total"].as_u64().unwrap_or(0) as u32
 }
 
 /// The first of `urls` that downloads and decodes. Tries no more once `stop` is true (the caller then checks it).

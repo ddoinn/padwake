@@ -82,6 +82,7 @@ let zone = 'row';             // row | top | hub1 | hub2 | viewer | menu | info 
 let topIndex = 0, heroIndex = 0, cardIndex = 0, menuIndex = 0;
 let menuFrom = 'row', menuItems = [], cards = [], hubGame = null;
 let running = null;           // the running game's id ('game' events)
+let switchTo = null;          // the game to start once the running one has closed (askSwitch)
 let dark = false;             // blacked out since a launch: comes in (reveal) when Home is next entered
 let onTop = false;
 // motion state
@@ -98,7 +99,7 @@ export default {
     root = el;
     el.innerHTML = `
       <div class="bgwrap"><div class="bg"><div class="layer"></div><div class="layer"></div></div><div class="scrim"></div><div class="dim"></div></div>
-      <div class="navy"></div>
+      <div class="navy"><div class="lglow"></div><div class="lmark"><img class="llogo" alt=""><div class="lname"></div></div><div class="lbar"><i></i></div></div>
       <div class="ui">
         <div class="top">
           <span class="tab sel" data-nav="tab:games">Games</span><span class="tab" data-nav="tab:media">Media</span>
@@ -1357,7 +1358,6 @@ function endViewer() {
 function openMenu(from) {
   const g = from === 'row' ? focusedGame() : hubGame;
   if (!g) return false;
-  menuFrom = from;
   menuItems = [
     ...(from === 'row' ? [['Game hub', () => { closeMenu(); enterHub1(); }]] : []),
     ['Information', () => showInfo(g)],
@@ -1365,13 +1365,21 @@ function openMenu(from) {
     ['Refresh art', () => { closeMenu(); host.library.refresh?.(g.id).catch(e => console.warn('refresh', e)); }],
     ...(running === g.id ? [['Close Game', () => { closeMenu(); host.games.close?.(g.id).catch(e => console.warn('close', e)); }]] : []),
   ];
-  $.menu.replaceChildren(...menuItems.map(([label], i) => {
+  return showMenu(from);
+}
+
+// the menu's items (menuItems) under an optional heading that can't be focused
+function showMenu(from, head = null) {
+  menuFrom = from;
+  const items = menuItems.map(([label], i) => {
     const el = document.createElement('div');
     el.className = 'item';
     el.dataset.nav = `menu:${i}`;
     el.textContent = label;
     return el;
-  }));
+  });
+  if (head) items.unshift(Object.assign(document.createElement('div'), { className: 'head', textContent: head }));
+  $.menu.replaceChildren(...items);
   // next to what it is for: under the focused tile's label, or beside •••
   $.menu.style.left = from === 'row' ? '172px' : '611px';
   $.menu.style.top = from === 'row' ? '318px' : from === 'hub1' ? `${836 - HUB_LIFT}px` : '318px';
@@ -1384,7 +1392,7 @@ function openMenu(from) {
 
 function menuSelect(i) {
   menuIndex = Math.max(0, Math.min(menuItems.length - 1, i));
-  [...$.menu.children].forEach((el, k) => el.classList.toggle('focus', k === menuIndex));
+  [...$.menu.querySelectorAll('.item')].forEach((el, k) => el.classList.toggle('focus', k === menuIndex));
 }
 
 function closeMenu() {
@@ -1483,15 +1491,12 @@ function track(a) {
 function launch(g) {
   if (!g) return false;
   if (running === g.id) return resume();
-  if (running) {
-    const other = games.find(x => x.id === running);
-    toast({ title: other?.name ?? running, message: 'Close it to play another game.', icon: other?.art?.tile ? host.fileUrl(other.art.tile) : null });
-    return 'back';
-  }
+  if (running) return askSwitch(g);
   if (zone === 'menu') closeMenu();
   zone = 'busy';
   stopVideo();
   stopMusic();
+  loadingScreen(g);
   launchAnims = [
     $.ui.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 10 * FRAME, easing: EASE_OUT, fill: 'forwards' }),
     $.navy.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 12 * FRAME, delay: 28 * FRAME, easing: EASE_OUT, fill: 'forwards' }),
@@ -1507,6 +1512,42 @@ function launch(g) {
     }), 29 * FRAME);
   }, 11 * FRAME);
   return true;
+}
+
+// The navy screen while the game loads: its logo (or name) rises in as the navy arrives, a slow glow drifts behind it
+// and a thin bar sweeps under it (home.css). `.loading` runs those animations; `blackout` takes it off, so nothing
+// animates once the app sleeps or comes back.
+function loadingScreen(g) {
+  const navy = $.navy, logo = navy.querySelector('.llogo'), name = navy.querySelector('.lname');
+  const src = g.art?.logo ? host.fileUrl(g.art.logo) : null;
+  navy.classList.toggle('haslogo', !!src);
+  name.textContent = g.name;
+  if (src) {
+    logo.src = src;
+    logo.decode().catch(() => navy.classList.remove('haslogo'));
+  } else logo.removeAttribute('src');
+  navy.classList.remove('loading');
+  void navy.offsetWidth; // restart the keyframes for a second launch
+  navy.classList.add('loading');
+}
+// The app hides (and WebView2 suspends) once the game fills the screen. Hidden, the launch screen stops moving: that
+// holds even if a suspend fails, so nothing of it runs while a game plays.
+document.addEventListener('visibilitychange', () => { if (document.hidden) $.navy?.classList.remove('loading'); });
+
+// Another game runs: offer to close it and play this one. Its close is the usual (asked, ended after 5 s); this one
+// starts when it has exited (gameEvent).
+function askSwitch(g) {
+  const other = games.find(x => x.id === running);
+  if (zone === 'menu') closeMenu();
+  menuItems = [
+    ['Close it and play', () => {
+      closeMenu();
+      switchTo = g.id;
+      host.games.close(running).catch(e => { switchTo = null; console.warn('close', e); });
+    }],
+    ['Cancel', () => closeMenu()],
+  ];
+  return showMenu(zone === 'hub1' ? 'hub1' : 'row', `${other?.name ?? running} is running`);
 }
 
 // back to the running game (Resume): it comes to the front and the app sleeps; Home stays as it is
@@ -1527,6 +1568,7 @@ function blackout() {
   for (const el of [$.top, $.rowwrap, $.herowrap, $.bgwrap]) setStyle(el, 'opacity', 0, 0);
   $.ui.style.opacity = 1;
   $.navy.style.opacity = 0;
+  $.navy.classList.remove('loading');
   dark = true;
 }
 
@@ -1555,6 +1597,10 @@ function gameEvent({ id, state, front }) {
     if (running === id) running = null;
     markRunning();
     returnHome(id, front === 'app');
+    // Switch: the game the player picked starts now
+    const next = switchTo && games.find(x => x.id === switchTo);
+    switchTo = null;
+    if (next) { focusItem(next.id); launch(next); }
   }
 }
 

@@ -103,3 +103,17 @@ and get their time back when you put the game in your games folder under the sam
 
 Art, trailers and your games folder aren't backed up: the PC fetches those again. The sign-in is kept in `data\`,
 readable only by your Windows account. **Sign Out** removes it; the backup stays on GitHub.
+
+## 11. Progress fills itself in
+
+A game's **How far you got** in the Journal updates after each session. If the game keeps achievements on the PC,
+it is the share you unlocked ("12 of 51 achievements"). Otherwise it is your time played against the game's usual
+main-story length from HowLongToBeat, shown as "≈ 38 %" and never more than 99 %. Set it yourself and yours wins;
+press **A** on it to go back to automatic.
+
+## 12. Cloud PCs (AntCloud)
+
+An AntCloud PC doesn't turn off from Windows. Turn on **Settings → Power → Cloud PC Mode**: Shut Down becomes
+**End Session**, which shows what to press on the device you stream from (Ctrl + F9 in the AntCloud app, F9 in a
+browser, then **Shut Down PC**), and Sleep is turned off. Padwake can't press those keys for you; they only work on
+your device.

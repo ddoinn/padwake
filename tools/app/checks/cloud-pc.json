@@ -1,0 +1,20 @@
+[
+  {"wait": 900},
+  {"assert": "__settings.stack.at(-1).list.rows.map(r => typeof r.label === 'function' ? r.label() : r.label).join('|') === 'Sleep|Restart|Shut Down|Exit to Desktop|Cloud PC|Cloud PC Mode'", "why": "Power lists the usual actions and the Cloud PC Mode toggle, off"},
+  {"key": "ArrowDown"}, {"key": "ArrowDown"}, {"key": "ArrowDown"}, {"key": "ArrowDown"}, {"wait": 300},
+  {"key": "Enter"}, {"wait": 500},
+  {"assert": "__mock.system && document.querySelector('#screen-settings .k-toggle .tog.on') && document.querySelector('#screen-settings .srow.k-action:nth-child(3) .label').textContent === 'End Session'", "why": "A turns Cloud PC Mode on and Shut Down becomes End Session"},
+  {"assert": "document.querySelector('#screen-settings .srow.k-action').classList.contains('disabled')", "why": "Sleep is off on a cloud PC"},
+  {"shot": "settings-power-cloud"},
+  {"key": "ArrowUp"}, {"key": "ArrowUp"}, {"wait": 300},
+  {"key": "Enter"}, {"wait": 500},
+  {"assert": "document.querySelector('#screen-settings .sdlg h2').textContent === 'End your AntCloud session' && document.querySelector('#screen-settings .sdlg p').textContent.includes('Ctrl + F9')", "why": "End Session says what to press on the streaming device"},
+  {"assert": "!__mock.system.powerLog.includes('shutdown')", "why": "nothing tries to shut Windows down"},
+  {"shot": "settings-end-session"},
+  {"key": "Enter"}, {"wait": 400},
+  {"eval": "__app.go('home').then(() => __app.push('control-center', {power: true}))"}, {"wait": 1200},
+  {"assert": "__cc.state().panel === 'power' && __cc.state().rows.join('|') === 'Restart|End Session|Exit to desktop'", "why": "Control Center's Power panel follows Cloud PC Mode"},
+  {"key": "ArrowDown"}, {"wait": 150}, {"key": "Enter"}, {"wait": 500},
+  {"assert": "__cc.state().rows.some(r => r.includes('Ctrl + F9')) && __cc.state().rows.at(-1) === 'OK'", "why": "End Session in Control Center shows the steps"},
+  {"shot": "cc-end-session"}
+]

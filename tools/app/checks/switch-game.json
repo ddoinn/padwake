@@ -1,0 +1,19 @@
+[
+  {"wait": 1000},
+  {"eval": "__app.go('home', {focus: 'hades'})"}, {"wait": 800},
+  {"key": "Enter"}, {"wait": 1800},
+  {"eval": "__mock.guideOverGame('tap')"}, {"wait": 2500},
+  {"assert": "getComputedStyle(document.querySelector('#screen-control-center .panel')).opacity === '1'", "why": "the game panel is visible, not only open"},
+  {"assert": "__cc.state().panel === 'game' && __cc.state().rows.join('|') === 'Back to Game|Switch Game|Close Game'", "why": "Guide over a game opens its panel: Back, Switch, Close"},
+  {"shot": "cc-over-game"},
+  {"key": "ArrowDown"}, {"wait": 150}, {"key": "Enter"}, {"wait": 1200},
+  {"assert": "__app.top.id === 'home' && __home.state().item === 'hades'", "why": "Switch Game goes Home with the running game focused"},
+  {"key": "ArrowRight"}, {"wait": 400},
+  {"eval": "__home.state().item"},
+  {"key": "Enter"}, {"wait": 400},
+  {"assert": "document.querySelector('#screen-home .menu .head').textContent === 'Hades is running' && [...document.querySelectorAll('#screen-home .menu .item')].map(e => e.textContent).join('|') === 'Close it and play|Cancel'", "why": "picking another game asks to close the running one"},
+  {"shot": "home-switch-ask"},
+  {"key": "Enter"}, {"wait": 2500},
+  {"eval": "JSON.stringify(__cc ? __home.state() : null).slice(0, 200)"},
+  {"assert": "__mock.library.find(g => g.id === 'hades').sessions >= 1 && document.querySelector('#screen-home .navy').classList.contains('loading')", "why": "Hades closes and the picked game launches"}
+]

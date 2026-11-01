@@ -1,0 +1,18 @@
+[
+  {"eval": "__app.go('library').then(() => __journal.sort('progress'))"},
+  {"wait": 900},
+  {"key": "e"}, {"wait": 900},
+  {"assert": "__journal.state().order.indexOf('elden-ring') === __journal.state().order.indexOf('hollow-knight') + 1", "why": "Most complete sorts the automatic 38 % between 41 % and 23 %"},
+  {"key": "ArrowDown"}, {"key": "ArrowDown"}, {"key": "ArrowDown"}, {"key": "ArrowDown"}, {"key": "ArrowDown"}, {"key": "ArrowDown"}, {"key": "ArrowDown"}, {"key": "ArrowDown"}, {"wait": 700},
+  {"assert": "[...document.querySelectorAll('#screen-library .jprog.auto span')].some(e => e.textContent === '≈ 38 %')", "why": "Elden Ring shows its playtime estimate in the list"},
+  {"shot": "journal-list-auto"},
+  {"eval": "__app.push('journal', {id: 'elden-ring'})"}, {"wait": 900},
+  {"key": "ArrowDown"}, {"key": "ArrowDown"}, {"wait": 200},
+  {"assert": "__journalPage.state().row === 'progress' && document.querySelector('#screen-journal .progress .src').textContent.includes('Main story ≈ 60 h')", "why": "the page says where the figure came from"},
+  {"shot": "journal-page-auto"},
+  {"key": "ArrowRight"}, {"wait": 100},
+  {"assert": "__journalPage.state().journal.progress === 45", "why": "Right from the automatic 38 % moves 5 %, snapped to a step (45 %)"},
+  {"assert": "document.querySelector('#screen-journal .jphint').textContent.includes('A goes back to automatic')", "why": "the hint offers automatic"},
+  {"key": "Enter"}, {"wait": 100},
+  {"assert": "__journalPage.state().journal.progress === null && !!document.querySelector('#screen-journal .progress .src')", "why": "A goes back to the app's figure"}
+]

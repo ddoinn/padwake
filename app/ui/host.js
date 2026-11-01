@@ -58,6 +58,8 @@ export const host = {
   // A game: {id, name, folder, exe, art: {tile, background, logo, cover}, tagline, description, screenshots[], trailer,
   // music, news: [{title, url, date, contents}], playtimeSec, lastPlayed, firstPlayed, sessions, journal: {rating 1–5,
   // status: playing | finished | completed (100 %) | paused | dropped, progress 0–100, note}, addedAt, steamAppId,
+  // autoProgress (the app's own figure, shown while journal.progress is unset: {percent, source: achievements |
+  // playtime, unlocked, total, typicalSec}),
   // and removedAt (a journal entry whose folder is gone: no screenshots, trailer, music or news; restoredAt too if it came
   // from a GitHub backup). Art and media are file
   // paths for fileUrl (square tile, 16:9 background without scrims, transparent logo, portrait cover, 1280 px shots,
@@ -269,6 +271,10 @@ if (isMock) {
     review('god-of-war', 5, 'completed', 100);
     review('hollow-knight', 3, 'paused', 41);
     review('cyberpunk-2077', 2, 'dropped', 23, 'Come back after the next big patch.');
+    // the app's own progress (library/progress.rs): Hades from its achievements (the player's 64 % wins), Elden Ring
+    // from playtime only
+    Object.assign(mockLibrary.find(x => x.id === 'hades'), { autoProgress: { percent: 47, source: 'achievements', unlocked: 23, total: 49 } });
+    Object.assign(mockLibrary.find(x => x.id === 'elden-ring'), { autoProgress: { percent: 38, source: 'playtime', typicalSec: 60 * 3600 } });
     const kept = (name, hours, days, sessions, journal, hue) => ({
       ...mockGame(name), playtimeSec: Math.round(hours * 3600), lastPlayed: Date.now() - (days + 3) * DAY, firstPlayed: Date.now() - (days + 90) * DAY,
       sessions, addedAt: Date.now() - (days + 120) * DAY, removedAt: Date.now() - days * DAY, journal: cleanJournal(journal),

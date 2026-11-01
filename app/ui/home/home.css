@@ -17,6 +17,38 @@
 #screen-home .navy {
   opacity: 0;
   background: radial-gradient(1000px 800px at 1010px 900px, #0f1731 0%, #0f1731 45%, #0e152d 62%, #050c22 72%, #00000a 100%);
+  overflow: hidden;
+}
+/* while the game loads (home.js loadingScreen): the logo or name centred at (960, 470) rises in as the navy arrives
+   (its cross-fade starts 467 ms after A), a soft glow drifts behind it, and from 1.3 s a 240 px bar sweeps under it.
+   Only opacity and transform move; nothing runs without .loading. */
+#screen-home .navy .lglow {
+  position: absolute; left: 360px; top: 30px; width: 1200px; height: 880px; opacity: 0;
+  background: radial-gradient(closest-side, rgba(88, 132, 255, .22), rgba(52, 84, 200, .1) 55%, rgba(20, 32, 90, 0) 100%);
+}
+#screen-home .navy .lmark {
+  position: absolute; left: 460px; top: 330px; width: 1000px; height: 280px; opacity: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+#screen-home .navy .llogo { display: none; max-width: 640px; max-height: 240px; object-fit: contain; filter: drop-shadow(0 6px 30px rgba(0, 0, 0, .45)); }
+#screen-home .navy .lname { font-size: 64px; line-height: 76px; font-weight: 300; text-align: center; overflow-wrap: anywhere; }
+#screen-home .navy.haslogo .llogo { display: block; }
+#screen-home .navy.haslogo .lname { display: none; }
+#screen-home .navy .lbar { position: absolute; left: 840px; top: 690px; width: 240px; height: 3px; border-radius: 2px; overflow: hidden; background: rgba(255, 255, 255, .1); opacity: 0; }
+#screen-home .navy .lbar i { position: absolute; left: 0; top: 0; width: 96px; height: 100%; border-radius: 2px; background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, .85), rgba(255, 255, 255, 0)); transform: translateX(-96px); }
+#screen-home .navy.loading .lglow { animation: lglow-in 900ms cubic-bezier(.22, 1, .36, 1) 400ms forwards, lglow-drift 9s ease-in-out 1300ms infinite alternate; }
+#screen-home .navy.loading .lmark { animation: lmark-in 700ms cubic-bezier(.22, 1, .36, 1) 520ms forwards, lmark-breathe 2.6s ease-in-out 1800ms infinite alternate; }
+#screen-home .navy.loading .lbar { animation: lbar-in 400ms ease-out 1300ms forwards; }
+#screen-home .navy.loading .lbar i { animation: lbar-sweep 1.5s cubic-bezier(.65, 0, .35, 1) 1300ms infinite; }
+@keyframes lglow-in { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: none; } }
+@keyframes lglow-drift { from { transform: none; } to { transform: translate(60px, -24px) scale(1.08); } }
+@keyframes lmark-in { from { opacity: 0; transform: translateY(18px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes lmark-breathe { from { opacity: 1; } to { opacity: .74; } }
+@keyframes lbar-in { to { opacity: 1; } }
+@keyframes lbar-sweep { from { transform: translateX(-96px); } to { transform: translateX(240px); } }
+@media (prefers-reduced-motion: reduce) {
+  #screen-home .navy.loading .lglow, #screen-home .navy.loading .lmark, #screen-home .navy.loading .lbar { animation: lbar-in 300ms ease-out 500ms forwards; }
+  #screen-home .navy.loading .lbar i { animation: none; transform: translateX(72px); }
 }
 #screen-home .top, #screen-home .rowwrap, #screen-home .hubhead, #screen-home .cards { position: absolute; inset: 0; }
 /* .001, not 0: invisible, but painted ahead, so Down never waits to paint them */
@@ -184,6 +216,7 @@
 }
 #screen-home .menu { width: 460px; padding: 10px 0; }
 #screen-home .menu .item { position: relative; height: 80px; padding: 0 30px; font-size: 30px; line-height: 80px; white-space: nowrap; }
+#screen-home .menu .head { padding: 14px 30px 8px; font-size: 24px; line-height: 32px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #screen-home .menu .item.focus { box-shadow: inset 0 0 0 2px #fff; border-radius: 6px; margin: 0 8px; padding: 0 22px; background: rgba(255, 255, 255, .08); }
 #screen-home .info { left: 570px; top: 230px; width: 780px; padding: 34px 40px 22px; }
 #screen-home .info .head { font-size: 36px; line-height: 50px; font-weight: 300; margin-bottom: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

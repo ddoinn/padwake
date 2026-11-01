@@ -4,7 +4,8 @@
 // - Over a running game: the host copied the screen as Guide was pressed (our window is opaque), so that still is the
 //   backdrop at full brightness, with the PS5's top and bottom scrims; the scrims fade in, then the bar and cards.
 //   B, Guide or "Back to game" fade them out and the game comes back to the front (host.games.resume).
-// - The bar: Home, the game (running: Back to game / Close Game; else the last played), Notifications, Sound,
+// - The bar: Home, the game (running: Back to Game / Switch Game / Close Game, open at once over the game; else the
+//   last played), Notifications, Sound,
 //   Controller, Network, Mouse mode, Power. Left/Right move along it, A opens the item's panel, Up goes to the cards.
 //   A panel rises from its bottom edge above its icon while the other icons dim and the cards fade (§1.7).
 // - Cards (bottom left): the game and the notifications. The current one is grown (432×520) as in §1.6; it gets the
@@ -14,6 +15,7 @@
 
 import { notices, session, takeOver, onNotices, library, dropPreStill } from './notices.js';
 import { toast } from './toast.js';
+import { isCloudPc, END_LABEL, END_TITLE, END_STEPS } from '../cloud-pc.js';
 
 const FRAME = 1000 / 60;
 const EASE_OUT = 'cubic-bezier(0, 0, .2, 1)';
@@ -125,7 +127,8 @@ export default {
     buildCards();
     focusBar(powerOnly ? ITEMS.indexOf('power') : 0);
     tickClock();
-    if (mode === 'game') openOverGame(over);
+    // over a running game, its panel is what Guide is for: Back to Game, Switch Game, Close Game
+    if (mode === 'game') openOverGame(over, runningGame() && !powerOnly ? 'game' : null);
     else openOverScreen();
     if (powerOnly && mode === 'home') openPanel('power', true);
   },
@@ -200,7 +203,8 @@ function openOverScreen() {
   growCurrent(OPEN.cardsDelay);
 }
 
-function openOverGame(over) {
+// `first`: a panel to open once the bar is on its way in (after the still, whose start cancels running animations)
+function openOverGame(over, first = null) {
   // black until the still is decoded (the screen below is dark while a game runs), then the still at full brightness:
   // half size first, the full one on top once it is decoded
   $.blank.style.opacity = 1;
@@ -219,6 +223,7 @@ function openOverGame(over) {
     track($.bar.animate([{ opacity: 0, transform: 'translateY(20px)' }, { opacity: 1, transform: 'none' }], t(OVER.bar, OVER.barDelay)));
     track($.cards.animate([{ opacity: 0 }, { opacity: 1 }], t(OVER.cards, OVER.cardsDelay)));
     growCurrent(OVER.cardsDelay);
+    if (first) openPanel(first);
   };
   over.full.then(async url => {
     if (!url) return;
@@ -503,7 +508,9 @@ function content(id) {
       const g = runningGame();
       if (g) {
         return { title: g.name, rows: [
-          row('Back to game', () => backToGame()),
+          row('Back to Game', () => backToGame()),
+          // Home with the game still running; picking another there offers to close this one (home.js askSwitch)
+          row('Switch Game', () => goHome(g.id)),
           row('Close Game', () => confirm(`Close ${g.name}?`, 'Unsaved progress will be lost.', 'Close Game', () => closeGame(g))),
         ] };
       }
@@ -532,7 +539,8 @@ function content(id) {
         text('B or the Guide button ends it.'),
       ] };
     case 'power':
-      return { title: 'Power', rows: POWER.map(([action, label, question]) => row(label, () => confirm(question, null, label, () => power(action)))) };
+      loadPower();
+      return { title: 'Power', rows: loading };
     default:
       return { title: '', rows: [] };
   }
@@ -548,6 +556,14 @@ function fill(id, rows) {
   panel.rows = rows;
   panel.focus = Math.max(0, Math.min(panel.focus, rows.length - 1));
   render();
+}
+
+// Cloud PC mode (../cloud-pc.js): no Sleep, and End Session in Shut down's place, which only says what to press
+async function loadPower() {
+  const cloud = isCloudPc(await host.settings.get().catch(() => ({})));
+  const end = () => subPanel({ id: 'power', title: END_TITLE, rows: [...END_STEPS.map(text), row('OK', () => closePanel())] });
+  fill('power', POWER.filter(([action]) => !(cloud && action === 'sleep')).map(([action, label, question]) =>
+    cloud && action === 'shutdown' ? row(END_LABEL, end) : row(label, () => confirm(question, null, label, () => power(action)))));
 }
 
 async function loadSound() {

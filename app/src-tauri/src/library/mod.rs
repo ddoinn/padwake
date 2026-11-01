@@ -5,6 +5,8 @@
 //! - The journal (Library → Journal): every played or reviewed game, with its time, sessions and the player's rating,
 //!   status, progress and note. A removed folder's entry stays, with its art (trailer, music and screenshots go).
 //! - Each game is enriched once (`steam.rs`): Steam store info, SteamGridDB art, news, trailer and music.
+//! - Progress works itself out (`progress.rs`): from achievement files, else playtime ÷ HowLongToBeat's main story;
+//!   after each session and once per start, for games in the journal. The player's own progress still wins.
 //! - The list is saved in `library.json` in the data dir, with art and media in `library\<id>\`, and every change is
 //!   sent to the page as the `library` event (the full list). Log: `library.log`.
 //! - `library.json` keeps art and media paths relative to the data dir, so a copied or moved data dir keeps its art;
@@ -12,7 +14,9 @@
 //! - `padwake.exe --sync-once [--root <dir>]` runs one pass without a window; `--watch` keeps watching.
 
 mod art;
+mod hltb;
 pub mod portable;
+mod progress;
 mod scan;
 mod steam;
 mod trailer;
@@ -60,6 +64,13 @@ pub struct Game {
     pub steam_app_id: Option<u64>,
     /// when store info and art last landed; `None` = still to fetch
     pub synced_at: Option<u64>,
+    /// progress the app worked out (`progress.rs`); the page shows it while `journal.progress` is unset
+    pub auto_progress: Option<progress::Auto>,
+    /// the Steam store's achievement count (0: none); `None` = not fetched yet
+    pub achievements_total: Option<u32>,
+    /// HowLongToBeat's main story, and when it was last looked up with no match (`None` = never)
+    pub hltb_main_sec: Option<u64>,
+    pub hltb_checked_at: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug)]
@@ -145,6 +156,10 @@ static STATE: Mutex<Saved> = Mutex::new(Saved { games: Vec::new(), kept: Vec::ne
 static NOTIFY: OnceLock<Box<dyn Fn(&[Game]) + Send + Sync>> = OnceLock::new();
 /// One enrichment at a time (the watcher, or `refresh` from the page).
 static ENRICHING: Mutex<()> = Mutex::new(());
+/// One progress update at a time (after a session, and the pass at start).
+static PROGRESSING: Mutex<()> = Mutex::new(());
+/// A game HowLongToBeat didn't know is looked up again after this long.
+const HLTB_RETRY_MS: u64 = 7 * 24 * 3600 * 1000;
 /// Set by `rescan` to wake the watcher for a full pass now.
 static WAKE: (Mutex<bool>, Condvar) = (Mutex::new(false), Condvar::new());
 
@@ -220,7 +235,70 @@ pub fn record_session(id: &str, secs: u64, ended_at: u64) -> bool {
     g.sessions += 1;
     g.first_played.get_or_insert(ended_at.saturating_sub(secs * 1000));
     changed(&s);
+    drop(s);
+    // not in unit tests: it may go to the network
+    #[cfg(not(test))]
+    {
+        let id = id.to_string();
+        let _ = std::thread::Builder::new().name("progress".into()).spawn(move || update_progress(&id));
+    }
     true
+}
+
+// ---------- automatic progress ----------
+
+/// Works out a game's progress again (`progress.rs`) and saves it if it moved. May ask the Steam store (achievement
+/// count, once) and HowLongToBeat (main story, once); never holds the library lock while it reads files or the network.
+fn update_progress(id: &str) {
+    let _one = PROGRESSING.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(g) = get(id) else { return };
+    let now = scan::ms(SystemTime::now());
+    let (mut store_total, mut hltb_sec, mut hltb_at) = (g.achievements_total, g.hltb_main_sec, g.hltb_checked_at);
+    let mut auto = None;
+    if let Some(u) = progress::unlocks(&g.folder, g.steam_app_id) {
+        if let (None, None, Some(app)) = (u.folder_total, store_total, g.steam_app_id) {
+            match steam::achievements_total(&Http::new(), app) {
+                Ok(t) => store_total = Some(t),
+                Err(e) => log(&format!("{}: achievement count: {e}", g.name)),
+            }
+        }
+        auto = progress::from_achievements(u.unlocked, u.folder_total.or(store_total));
+    }
+    if auto.is_none() && g.playtime_sec > 0 {
+        let due = hltb_at.is_none_or(|t| now.saturating_sub(t) > HLTB_RETRY_MS);
+        if hltb_sec.is_none() && due {
+            match hltb::main_story(&g.name) {
+                Ok(Some(s)) => hltb_sec = Some(s),
+                Ok(None) => hltb_at = Some(now),
+                // tried again at the next start or session
+                Err(e) => log(&format!("{}: {e}", g.name)),
+            }
+        }
+        auto = progress::from_playtime(g.playtime_sec, hltb_sec);
+    }
+    let mut s = state();
+    let Some(g) = s.games.iter_mut().find(|g| g.id == id) else { return };
+    let before = (g.auto_progress.clone(), g.achievements_total, g.hltb_main_sec, g.hltb_checked_at);
+    let after = (auto, store_total, hltb_sec, hltb_at);
+    if before == after {
+        return;
+    }
+    if before.0 != after.0 {
+        log(&format!("{}: progress {:?}", g.name, after.0));
+    }
+    (g.auto_progress, g.achievements_total, g.hltb_main_sec, g.hltb_checked_at) = after;
+    changed(&s);
+}
+
+/// Every game in the journal still in the library, once per start.
+fn update_all_progress() {
+    let ids: Vec<String> = state().games.iter().filter(|g| g.in_journal()).map(|g| g.id.clone()).collect();
+    for id in ids {
+        if crate::games::is_running() {
+            return;
+        }
+        update_progress(&id);
+    }
 }
 
 /// The journal: the library's played or reviewed games, then the kept ones whose folder is gone (`removedAt` set).
@@ -609,6 +687,7 @@ fn enrich_one(id: &str, http: &Http, ffmpeg: Option<&Path>) -> Result<String, St
     g.trailer = found.trailer;
     g.music = found.music;
     g.news = found.news;
+    g.achievements_total = Some(found.achievements_total);
     g.synced_at = Some(scan::ms(SystemTime::now()));
     let summary = summary(g);
     changed(&s);
@@ -642,10 +721,15 @@ fn summary(g: &Game) -> String {
 /// The watcher loop: a tick every 30 s (or when `rescan` wakes it). `root` overrides `gamesRoot` (CLI).
 fn watch(root: Option<PathBuf>) {
     let mut w = Watch::default();
+    let mut progress_done = false;
     loop {
         let r = root.clone().unwrap_or_else(crate::data::games_root);
         tick(&mut w, &r, &crate::games::is_running);
         w.report.clear();
+        if !progress_done && !crate::games::is_running() {
+            update_all_progress();
+            progress_done = true;
+        }
         let mut woken = WAKE.0.lock().unwrap_or_else(|e| e.into_inner());
         if !*woken {
             woken = WAKE.1.wait_timeout(woken, TICK).unwrap_or_else(|e| e.into_inner()).0;

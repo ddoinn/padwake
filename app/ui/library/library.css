@@ -140,6 +140,7 @@
 #screen-library .jprog.full .fill { background: #f2c75c; }
 #screen-library .jprog span { position: absolute; right: 0; top: 0; font-size: 22px; line-height: 36px; white-space: nowrap; }
 #screen-library .jprog.unset span { color: #77767d; }
+#screen-library .jprog.auto .fill { background: rgba(255, 255, 255, .62); }
 
 /* the focus ring: 3 px, 3 px outside the row, as on a cover */
 #screen-library .jring { position: absolute; left: 0; top: 0; width: 1588px; height: 144px; border: 3px solid rgba(255, 255, 255, .8);

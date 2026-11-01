@@ -8,6 +8,7 @@ import { network } from './network/network.js';
 import { padTest } from './controller-test.js';
 export { padTest } from './controller-test.js';
 import { savedData, softwareCategory } from './cloud.js';
+import { isCloudPc, END_LABEL, END_TITLE, END_STEPS } from '../cloud-pc.js';
 
 export const root = () => ({
   title: 'Settings',
@@ -181,7 +182,8 @@ export function library(ctx) {
   };
 }
 
-// ---------- Power: each action asks first ----------
+// ---------- Power: each action asks first. Cloud PC mode (../cloud-pc.js): Shut Down becomes End Session, which only
+// says what to press on the streaming device, and Sleep is off ----------
 const POWER = [
   ['sleep', 'Sleep', 'Put the PC to sleep?', 'Press any button on the controller or the power button to wake it.'],
   ['restart', 'Restart', 'Restart the PC?', 'Running games close without saving.'],
@@ -189,17 +191,36 @@ const POWER = [
   ['exit', 'Exit to Desktop', 'Exit to the desktop?', 'Padwake closes and Windows shows its desktop.'],
 ];
 export function power(ctx) {
+  const s = { settings: {} };
+  const cloud = () => isCloudPc(s.settings);
   return {
     title: 'Power',
     layout: 'full',
-    rows: POWER.map(([action, label, question, text]) => ({
-      kind: 'action', label,
-      desc: action === 'exit' ? 'Close Padwake and use Windows.' : undefined,
-      run: async () => {
-        const ok = await ctx.dialog({ title: question, text, buttons: [{ label, value: true }, { label: 'Cancel', value: false }], focus: 1 });
-        if (ok) await ctx.host.system.power(action);
+    load: async () => { s.settings = await ctx.host.settings.get().catch(() => ({})); },
+    events: { settings: v => { s.settings = v; ctx.update(); } },
+    rows: [
+      ...POWER.map(([action, label, question, text]) => ({
+        kind: 'action',
+        label: action === 'shutdown' ? () => (cloud() ? END_LABEL : label) : label,
+        desc: action === 'exit' ? 'Close Padwake and use Windows.'
+          : action === 'sleep' ? () => (cloud() ? "A cloud PC can't sleep. Cloud PC Mode is on." : undefined)
+          : action === 'shutdown' ? () => (cloud() ? 'How to turn off your AntCloud PC.' : undefined) : undefined,
+        disabled: action === 'sleep' ? cloud : undefined,
+        run: async () => {
+          if (action === 'sleep' && cloud()) return;
+          if (action === 'shutdown' && cloud()) return void await ctx.dialog({ title: END_TITLE, text: END_STEPS.join('\n'), buttons: [{ label: 'OK', value: true }] });
+          const ok = await ctx.dialog({ title: question, text, buttons: [{ label, value: true }, { label: 'Cancel', value: false }], focus: 1 });
+          if (ok) await ctx.host.system.power(action);
+        },
+      })),
+      { kind: 'header', label: 'Cloud PC' },
+      {
+        kind: 'toggle', label: 'Cloud PC Mode',
+        desc: "For AntCloud PCs, which don't turn off from Windows. Shut Down shows how to end your session from your device instead.",
+        get: cloud,
+        set: async v => { s.settings = await ctx.host.settings.set({ cloudPc: v }); },
       },
-    })),
+    ],
   };
 }
 
