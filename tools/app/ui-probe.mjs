@@ -3,7 +3,7 @@
 // over raw CDP (Node's built-in WebSocket, no dependencies), samples elements every animation frame and saves
 // screenshots. Later rows use it to check motion against design/ps5/ within ±1 frame.
 //
-//   node tools/app/ui-probe.mjs [--query "scene=home&focus=hades"] [--out W:\tmp\ui-probe] [--steps '<json>' | file.json]
+//   node tools/app/ui-probe.mjs [--query "scene=home&focus=hades"] [--out W:\system\tmp\ui-probe] [--steps '<json>' | file.json]
 //
 // A scenario is a JSON array of steps, run in order:
 //   {"wait": 500}                                   wait in ms
@@ -28,8 +28,8 @@ import { fileURLToPath } from 'node:url';
 const args = process.argv.slice(2);
 const opt = (name, def) => { const i = args.indexOf(`--${name}`); return i >= 0 ? args.splice(i, 2)[1] : def; };
 const EDGE = opt('edge', process.env.EDGE || 'C:\\Program Files (x86)\\Microsoft\\EdgeCore\\156.0.4314.50\\msedge.exe');
-const PROFILE = opt('profile', 'W:\\tmp\\edge-probe');
-const OUT = resolve(opt('out', 'W:\\tmp\\ui-probe'));
+const PROFILE = opt('profile', 'W:\\system\\tmp\\edge-probe');
+const OUT = resolve(opt('out', 'W:\\system\\tmp\\ui-probe'));
 const QUERY = opt('query', 'scene=home');
 const STEPS = opt('steps', null);
 const UI = resolve(dirname(fileURLToPath(import.meta.url)), '../../app/ui');

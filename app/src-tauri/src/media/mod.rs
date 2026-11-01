@@ -152,7 +152,7 @@ async fn open<R: Runtime>(app: AppHandle<R>, id: String) -> Result<(), String> {
 mod tests {
     use super::*;
     fn scratch() -> PathBuf {
-        let p = PathBuf::from(r"W:\tmp").join(format!("a12-test-{}", std::process::id()));
+        let p = PathBuf::from(r"W:\system\tmp").join(format!("a12-test-{}", std::process::id()));
         std::fs::create_dir_all(&p).unwrap(); p
     }
     #[test]

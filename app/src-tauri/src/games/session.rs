@@ -524,7 +524,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// A launcher stub (`W:\tmp\ch-lc\make-launcher.ps1` makes one) starts the real game outside the job and exits at
+    /// A launcher stub (`W:\system\tmp\ch-lc\make-launcher.ps1` makes one) starts the real game outside the job and exits at
     /// once; the session must last until the real game is closed.
     #[test]
     #[ignore = "real windows: set CH_LAUNCHER to a launcher-stub folder; shows a full-screen black window for 3 s"]

@@ -406,7 +406,7 @@ const MOCK = {
     set_volume: ({ level }) => { mockSystem.volume.level = Math.min(1, Math.max(0, level)); return null; },
     battery: () => mockSystem.pads,
     power: ({ action }) => { mockSystem.powerLog.push(action); return null; },
-    about: () => ({ version: '0.1.0', dataDir: 'W:\\tmp\\ch-target\\release\\data', exe: 'W:\\tmp\\ch-target\\release\\padwake.exe' }),
+    about: () => ({ version: '0.1.0', dataDir: 'W:\\system\\tmp\\ch-target\\release\\data', exe: 'W:\\system\\tmp\\ch-target\\release\\padwake.exe' }),
     display: () => ({ ...mockSystem.display, trial: !!mockSystem.trial }),
     try_display_mode: mode => {
       const d = mockSystem.display;

@@ -1,7 +1,7 @@
 # Full-screen capture at the screen's physical size (DPI aware: the Avita is 1920x1080 at 150%) to a PNG. Run in the
 # desktop session. Prints the size and the foreground window's title.
 #   snap.ps1 -Out shots\review\a1-home.png
-param([string]$Out = 'W:\tmp\snap.png')
+param([string]$Out = 'W:\system\tmp\snap.png')
 Add-Type -AssemblyName System.Drawing
 Add-Type -Namespace App -Name Snap -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr c);

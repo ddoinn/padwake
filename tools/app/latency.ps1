@@ -17,7 +17,7 @@
 #   latency.ps1 -Return [-N 5] [-Play 3000] [-Game 'Stand-in Long'] [-GameExe StandinLong] [-Data <dir>]
 param([int]$N = 20, [switch]$Jitter, [int]$Gap = 600, [string]$Exe = 'padwake', [switch]$Return, [int]$Play = 3000,
   [string]$Game = 'Stand-in Long', [string]$GameExe = 'StandinLong', [string]$Data = '',
-  [int]$Y = 180, [int]$X0 = 360, [int]$X1 = 1900, [string]$Out = 'W:\tmp\app-latency')
+  [int]$Y = 180, [int]$X0 = 360, [int]$X1 = 1900, [string]$Out = 'W:\system\tmp\app-latency')
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\guard.ps1"
 Add-Type -TypeDefinition @'

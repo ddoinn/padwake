@@ -1,8 +1,8 @@
 # Key-injection guard for tools that press keys on the dev laptop; dot-source it: . "$PSScriptRoot\guard.ps1"
 # The dev laptop's built-in keyboard floods phantom input, so GetLastInputInfo is useless.
-# humanwatch.ps1 hooks real input and writes W:\tools\ch\human.tick; Wait-Quiet holds each injected key until no
+# humanwatch.ps1 hooks real input and writes W:\system\tools\ch\human.tick; Wait-Quiet holds each injected key until no
 # person has touched the laptop for 60 s.
-$HumanTick = 'W:\tools\ch\human.tick'
+$HumanTick = 'W:\system\tools\ch\human.tick'
 
 function Start-HumanWatch {
   $running = Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object CommandLine -match 'humanwatch\.ps1'

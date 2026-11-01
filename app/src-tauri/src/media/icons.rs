@@ -197,7 +197,7 @@ mod tests {
     }
     #[test]
     fn cache_records_source_and_roundtrips_portable_paths() {
-        let root = PathBuf::from(r"W:\tmp").join(format!("media-icon-test-{}", std::process::id()));
+        let root = PathBuf::from(r"W:\system\tmp").join(format!("media-icon-test-{}", std::process::id()));
         let mut entries = defaults(&root).unwrap();
         let img = image::RgbaImage::from_pixel(192,192,image::Rgba([12,34,56,255]));
         let mut png = Vec::new();

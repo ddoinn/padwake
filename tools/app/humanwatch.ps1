@@ -1,7 +1,7 @@
 # Person detector for the dev laptop (guard.ps1 starts it in the desktop session). Low-level hooks count all mouse
 # input, real key input (not injected keys, not the broken built-in key: vk 255, 30/s), pad packet changes, and
 # Deskflow entering or leaving this screen (the Mac's input arrives injected). Writes
-# "<last person input UTC ticks> <now UTC ticks>" to W:\tools\ch\human.tick every 200 ms.
+# "<last person input UTC ticks> <now UTC ticks>" to W:\system\tools\ch\human.tick every 200 ms.
 # The hooks get a thread that does nothing else: Windows holds every key and mouse event until a low-level hook
 # returns, so a hook sharing a thread with the file work below delays all input (and skews tools/app/latency.ps1).
 param([int]$Minutes = 60)
@@ -29,5 +29,5 @@ $log = 'C:\ProgramData\Deskflow\deskflow-daemon.log'; $script:len = [long](Get-I
 $t.Add_Tick({ $n = (Get-Item $log -EA 0).Length; if ($n -lt $script:len) { $script:len = 0 }
   if ($n -gt $script:len) { $fs = [IO.File]::Open($log, 'Open', 'Read', 'ReadWrite'); $fs.Seek($script:len, 'Begin') | Out-Null; $b = New-Object byte[] ($n - $script:len); $fs.Read($b, 0, $b.Length) | Out-Null; $fs.Close(); $script:len = $n
     if ([Text.Encoding]::UTF8.GetString($b) -match 'entering computer|leaving computer') { [Hw]::Last = [DateTime]::UtcNow.Ticks } }
-  [Hw]::Pads(); Set-Content W:\tools\ch\human.tick "$([Hw]::Last) $([DateTime]::UtcNow.Ticks)"; if ((Get-Date) -gt $end) { [Windows.Forms.Application]::Exit() } })
+  [Hw]::Pads(); Set-Content W:\system\tools\ch\human.tick "$([Hw]::Last) $([DateTime]::UtcNow.Ticks)"; if ((Get-Date) -gt $end) { [Windows.Forms.Application]::Exit() } })
 $t.Start(); [Windows.Forms.Application]::Run()

@@ -817,7 +817,7 @@ mod tests {
         // an absolute entry under this data dir stays as it is
         assert_eq!(to_absolute(&tile, root), tile);
         // an old absolute entry from a data dir that moved (antcloud deploy, renamed app folder) lands under this one
-        let moved = Path::new(r"W:\tmp\ch-target-e2e\release\data\library\hades\shot2.jpg");
+        let moved = Path::new(r"W:\system\tmp\ch-target-e2e\release\data\library\hades\shot2.jpg");
         assert_eq!(to_absolute(moved, root), root.join(r"library\hades\shot2.jpg"));
         // anything else is left alone
         let other = Path::new(r"C:\Pictures\x.jpg");

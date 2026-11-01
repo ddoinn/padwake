@@ -4,7 +4,7 @@
 #   powershell -File tools/app/release.ps1 -Version 0.2.0 -NotesFile notes.md
 #   -Notes "- ..."           release notes inline instead (Markdown; the app shows the first 4 lines)
 #   -Repo owner/name         another repository (default: the one the apps check, update::REPO)
-#   -Target W:\tmp\...       the cargo target dir to build in
+#   -Target W:\system\tmp\...       the cargo target dir to build in
 #   -Base <zip>              the previous portable zip to build on (default: the one in the latest release)
 #   -DryRun                  build and pack into dist\release-<v>; publish nothing, keep the version
 # A release has three assets:
@@ -18,7 +18,7 @@ param(
   [string]$Notes = '',
   [string]$NotesFile = '',
   [string]$Repo = 'ddoinn/padwake',
-  [string]$Target = 'W:\tmp\ch-target-release',
+  [string]$Target = 'W:\system\tmp\ch-target-release',
   [string]$Base = '',
   [switch]$DryRun
 )
@@ -54,8 +54,8 @@ else {
 
 [IO.File]::WriteAllText($toml, [regex]::Replace($text, '(?m)^version = "[^"]+"', "version = `"$Version`"", 1))
 "version $old -> $Version"
-$env:RUSTUP_HOME = 'W:\tools\rust\rustup'; $env:CARGO_HOME = 'W:\tools\rust\cargo'
-$env:PATH = "W:\tools\rust\cargo\bin;$env:PATH"; $env:CARGO_TARGET_DIR = $Target
+$env:RUSTUP_HOME = 'W:\system\tools\rust\rustup'; $env:CARGO_HOME = 'W:\system\tools\rust\cargo'
+$env:PATH = "W:\system\tools\rust\cargo\bin;$env:PATH"; $env:CARGO_TARGET_DIR = $Target
 Push-Location "$root\app"
 try { npx tauri build --no-bundle; if ($LASTEXITCODE) { throw "build failed ($LASTEXITCODE)" } }
 catch { Restore; throw }

@@ -1,11 +1,11 @@
 # Package the release exe and optional ffmpeg into dist\padwake. Keep personal data out of the package.
-# usage: powershell -File tools/app/package.ps1 [-Build] [-Target W:\tmp\ch-target-release]
-param([switch]$Build, [string]$Target = 'W:\tmp\ch-target-release')
+# usage: powershell -File tools/app/package.ps1 [-Build] [-Target W:\system\tmp\ch-target-release]
+param([switch]$Build, [string]$Target = 'W:\system\tmp\ch-target-release')
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path (Split-Path $PSScriptRoot)
 if ($Build) {
-  $env:RUSTUP_HOME = 'W:\tools\rust\rustup'; $env:CARGO_HOME = 'W:\tools\rust\cargo'
-  $env:PATH = "W:\tools\rust\cargo\bin;$env:PATH"; $env:CARGO_TARGET_DIR = $Target
+  $env:RUSTUP_HOME = 'W:\system\tools\rust\rustup'; $env:CARGO_HOME = 'W:\system\tools\rust\cargo'
+  $env:PATH = "W:\system\tools\rust\cargo\bin;$env:PATH"; $env:CARGO_TARGET_DIR = $Target
   Push-Location "$repo\app"
   try { npx tauri build --no-bundle; if ($LASTEXITCODE) { throw "build failed ($LASTEXITCODE)" } } finally { Pop-Location }
 }
@@ -15,7 +15,7 @@ $out = "$repo\dist\padwake"
 New-Item $out -ItemType Directory -Force | Out-Null
 Copy-Item $exe $out -Force
 # LGPL build, shipped as its own exe; the library looks for ffmpeg.exe beside padwake.exe
-$ff = 'W:\tools\ffmpeg-dl\x\ffmpeg-master-latest-win64-lgpl\bin\ffmpeg.exe'
+$ff = 'W:\system\tools\ffmpeg-dl\x\ffmpeg-master-latest-win64-lgpl\bin\ffmpeg.exe'
 if ((Test-Path $ff) -and -not (Test-Path "$out\ffmpeg.exe")) { Copy-Item $ff $out }
 $rev = git -C $repo rev-parse --short HEAD
 $dirty = if (git -C $repo status --porcelain -- app) { ' +local changes' } else { '' }
