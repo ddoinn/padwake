@@ -2,17 +2,17 @@
 // row) or Home (☰ Options → Journal): app.push('journal', {id}); B goes back. Removed games open here too.
 //
 // Layout (stage px): the game's background art under left and bottom scrims; the hub's header (tile 56–127 × 52–123,
-// "Journal" x 176 cap 77); its logo or name at x 172 down to y 340, then the tagline (or when it was removed); four
-// editable rows from y 452 (900 wide): Your rating, Status, How far you got, Your note; Forget this game for a removed
-// one. On the right a card (x 1288–1748) with the square art and the facts the app recorded: time played, sessions,
-// first and last played, added, removed.
-// Buttons: Up / Down move between rows; Left / Right change the rating (0–5 stars), the status, or the progress in
-// 5 % steps (LT / RT: 1 %); A on the rating or status steps it, on progress the player set goes back to the app's
-// own (game.autoProgress, from achievements or playtime), on the note opens the keyboard, on Forget asks once
-// more. Each change is saved 300 ms after the last one, and at once when the page closes.
+// "Journal" x 176 cap 77); its logo or name at x 172 down to y 340, then the tagline (or when it was removed); three
+// editable rows from y 452 (900 wide): Your rating, Status, Your note; Forget this game for a removed one. On the right
+// a card (x 1288–1748) with the square art and the facts the app recorded, which nobody can edit: achievements (the
+// only percent, game.achievements), time played, sessions, first and last played, added, the main story's usual
+// length or when it was removed.
+// Buttons: Up / Down move between rows; Left / Right change the rating (0–5 stars) or the status; A on the rating or
+// status steps it, on the note opens the keyboard, on Forget asks once more. Each change is saved 300 ms after the last
+// one, and at once when the page closes.
 
 import * as keyboard from '../keyboard/keyboard.js';
-import { STATUSES, statusOf, EMPTY, NOTE_MAX, hours, date, ago, stars, tint, squareArt, autoNote } from './shared.js';
+import { STATUSES, statusOf, EMPTY, NOTE_MAX, hours, date, ago, stars, tint, squareArt, percentOf } from './shared.js';
 
 const FRAME = 1000 / 60;
 const ROWS_Y = 452, ROW_H = 88, PITCH = 100, NOTE_H = 136, ROW_W = 900, X0 = 172;
@@ -21,7 +21,6 @@ const IN = { duration: 12 * FRAME, easing: 'cubic-bezier(0, 0, .2, 1)' };
 const HINTS = {
   rating: 'Left and right set the stars',
   status: 'Left and right change the status',
-  progress: () => `Left and right move 5 %  ·  LT and RT move 1 %${journal.progress != null && game?.autoProgress ? '  ·  A goes back to automatic' : ''}`,
   note: 'A writes a note',
   forget: 'Your time and notes for this game go too',
 };
@@ -46,7 +45,7 @@ export default {
         <div class="jprows"></div>
         <div class="jpring"></div>
         <div class="jphint"></div>
-        <div class="jpcard"><div class="art"></div><div class="facts"></div></div>
+        <div class="jpcard"><div class="art"></div><div class="ach"><div class="l">Achievements</div><div class="v"></div><div class="track"><div class="fill"></div></div></div><div class="facts"></div></div>
       </div>`;
     for (const k of ['jpbg', 'jpage', 'jphead', 'jpname', 'jpline', 'jprows', 'jpring', 'jphint', 'jpcard']) $[k] = el.querySelector(`.${k}`);
     $.bgimg = $.jpbg.querySelector('img');
@@ -55,6 +54,7 @@ export default {
     $.nameText = $.jpname.querySelector('.text');
     $.art = $.jpcard.querySelector('.art');
     $.facts = $.jpcard.querySelector('.facts');
+    $.ach = $.jpcard.querySelector('.ach');
     // read-only state for tests (tools/app/ui-probe.mjs eval steps)
     window.__journalPage = { state: () => ({ id: game?.id, row: rows[at]?.id, rows: rows.map(r => r.id), journal: { ...journal }, keyboard: !!kb?.isOpen, forgetArmed: !!forgetArmed }) };
   },
@@ -88,7 +88,6 @@ export default {
     const row = rows[at];
     if (name === 'left' || name === 'right') return row.step?.(name === 'left' ? -1 : 1, e) ?? false;
     if (e.held) return false;
-    if (name === 'lt' || name === 'rt') return row.fine?.(name === 'lt' ? -1 : 1) ?? false;
     if (name === 'a') return row.press?.() ?? false;
     return false;
   },
@@ -144,13 +143,19 @@ function show(g) {
 
 function paintFacts() {
   const g = game;
+  const pct = percentOf(g);
+  $.ach.classList.toggle('none', pct == null);
+  $.ach.classList.toggle('full', pct === 100);
+  $.ach.querySelector('.v').textContent = pct == null ? 'None recorded on this PC' : `${g.achievements.unlocked} of ${g.achievements.total}  ·  ${pct} %`;
+  $.ach.querySelector('.fill').style.width = `${pct ?? 0}%`;
   const facts = [
     ['Time played', g.playtimeSec ? hours(g.playtimeSec) : 'None yet'],
     ['Sessions', g.sessions ? String(g.sessions) : '—'],
     ['First played', g.firstPlayed ? date(g.firstPlayed) : '—'],
     ['Last played', g.lastPlayed ? ago(g.lastPlayed) : '—'],
     ['Added', g.addedAt ? date(g.addedAt) : '—'],
-    g.restoredAt ? ['Restored', date(g.restoredAt)] : g.removedAt ? ['Removed', date(g.removedAt)] : ['On this PC', 'Installed'],
+    g.restoredAt ? ['Restored', date(g.restoredAt)] : g.removedAt ? ['Removed', date(g.removedAt)]
+      : g.hltbMainSec ? ['Main story takes', `About ${Math.max(1, Math.round(g.hltbMainSec / 3600))} h`] : ['On this PC', 'Installed'],
   ];
   $.facts.innerHTML = facts.map(() => '<div class="f"><div class="l"></div><div class="v"></div></div>').join('');
   [...$.facts.children].forEach((el, i) => {
@@ -176,26 +181,6 @@ function buildRows() {
       },
       step: (d, e) => (e?.held ? false : setStatus(d)),
       press: () => setStatus(1, true),
-    },
-    {
-      id: 'progress', label: 'How far you got',
-      // the player's figure, else the app's (dimmer, with where it came from under the bar)
-      draw: el => {
-        const auto = journal.progress == null ? game.autoProgress ?? null : null;
-        const p = journal.progress ?? auto?.percent ?? null;
-        const shown = p == null ? 'Not set' : `${auto?.source === 'playtime' ? '≈ ' : ''}${p} %`;
-        el.innerHTML = `<div class="track${p === 100 ? ' full' : ''}${auto ? ' auto' : ''}"><div class="fill" style="width:${p ?? 0}%"></div></div><span class="v${p == null ? ' unset' : ''}">${shown}</span>${auto ? '<span class="src"></span>' : ''}`;
-        if (auto) el.querySelector('.src').textContent = `Automatic  ·  ${autoNote(auto)}`;
-        if (rows[at]?.id === 'progress') $.jphint.textContent = HINTS.progress();
-      },
-      // the first step from "not set" lands on 0 % or 5 %; from the app's figure it moves 5 % on from there
-      step: d => {
-        const from = journal.progress ?? game.autoProgress?.percent;
-        return set({ progress: from == null ? (d > 0 ? 5 : 0) : clamp(Math.round((from + d * 5) / 5) * 5, 0, 100) });
-      },
-      fine: d => set({ progress: clamp((journal.progress ?? game.autoProgress?.percent ?? 0) + d, 0, 100) }),
-      // undefined otherwise, so a click still steps it
-      press: () => (game.autoProgress && journal.progress != null ? set({ progress: null }) : undefined),
     },
     {
       id: 'note', label: 'Your note', tall: true,
@@ -234,10 +219,7 @@ function setStatus(d, wrap = false) {
   let n = i + d;
   if (wrap) n = (n + STATUSES.length) % STATUSES.length;
   if (n < 0 || n >= STATUSES.length) return false;
-  const status = STATUSES[n].id;
-  // 100 % complete means all of it
-  const patch = status === 'completed' ? { status, progress: 100 } : { status };
-  return set(patch);
+  return set({ status: STATUSES[n].id });
 }
 
 // a change: redrawn now, saved shortly; false (no sound) when nothing changed
@@ -278,8 +260,7 @@ function focusRow(i, instant = false) {
   $.jpring.style.width = `${r.button ? r.el.offsetWidth + 14 : ROW_W + 40}px`;
   $.jpring.getAnimations().forEach(a => a.cancel());
   if (!instant) $.jpring.animate([{ opacity: 0.35 }, { opacity: 1 }], { duration: 8 * FRAME, easing: 'linear' });
-  const hint = HINTS[r.id];
-  $.jphint.textContent = (typeof hint === 'function' ? hint() : hint) ?? '';
+  $.jphint.textContent = HINTS[r.id] ?? '';
   return true;
 }
 

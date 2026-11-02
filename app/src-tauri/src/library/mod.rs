@@ -3,10 +3,10 @@
 //!   for 3 min (`PADWAKE_QUIET_SEC` overrides); removed folders leave, but a played game's id and playtime are
 //!   kept for when its folder comes back.
 //! - The journal (Library → Journal): every played or reviewed game, with its time, sessions and the player's rating,
-//!   status, progress and note. A removed folder's entry stays, with its art (trailer, music and screenshots go).
+//!   status and note. A removed folder's entry stays, with its art (trailer, music and screenshots go).
 //! - Each game is enriched once (`steam.rs`): Steam store info, SteamGridDB art, news, trailer and music.
-//! - Progress works itself out (`progress.rs`): from achievement files, else playtime ÷ HowLongToBeat's main story;
-//!   after each session and once per start, for games in the journal. The player's own progress still wins.
+//! - Achievements are read from the game's files (`progress.rs`), and the main story's usual length comes from
+//!   HowLongToBeat; after each session and once per start, for games in the journal. Nobody types these in.
 //! - The list is saved in `library.json` in the data dir, with art and media in `library\<id>\`, and every change is
 //!   sent to the page as the `library` event (the full list). Log: `library.log`.
 //! - `library.json` keeps art and media paths relative to the data dir, so a copied or moved data dir keeps its art;
@@ -64,8 +64,8 @@ pub struct Game {
     pub steam_app_id: Option<u64>,
     /// when store info and art last landed; `None` = still to fetch
     pub synced_at: Option<u64>,
-    /// progress the app worked out (`progress.rs`); the page shows it while `journal.progress` is unset
-    pub auto_progress: Option<progress::Auto>,
+    /// achievements read from the game's files (`progress.rs`); `None` = no unlock file, so no figure to show
+    pub achievements: Option<progress::Achievements>,
     /// the Steam store's achievement count (0: none); `None` = not fetched yet
     pub achievements_total: Option<u32>,
     /// HowLongToBeat's main story, and when it was last looked up with no match (`None` = never)
@@ -93,8 +93,6 @@ pub struct Journal {
     /// 1–5 stars
     pub rating: Option<u8>,
     pub status: Option<Status>,
-    /// how much of the game is done, 0–100 %
-    pub progress: Option<u8>,
     pub note: Option<String>,
 }
 
@@ -117,10 +115,9 @@ impl Journal {
         *self == Journal::default()
     }
 
-    /// Stars 1–5 (0 clears), progress up to 100, the note trimmed to `NOTE_MAX` characters (empty clears).
+    /// Stars 1–5 (0 clears), the note trimmed to `NOTE_MAX` characters (empty clears).
     fn cleaned(mut self) -> Journal {
         self.rating = self.rating.filter(|&r| r > 0).map(|r| r.min(5));
-        self.progress = self.progress.map(|p| p.min(100));
         self.note = self.note.map(|n| n.trim().chars().take(NOTE_MAX).collect::<String>()).filter(|n| !n.is_empty());
         self
     }
@@ -156,7 +153,7 @@ static STATE: Mutex<Saved> = Mutex::new(Saved { games: Vec::new(), kept: Vec::ne
 static NOTIFY: OnceLock<Box<dyn Fn(&[Game]) + Send + Sync>> = OnceLock::new();
 /// One enrichment at a time (the watcher, or `refresh` from the page).
 static ENRICHING: Mutex<()> = Mutex::new(());
-/// One progress update at a time (after a session, and the pass at start).
+/// One achievements update at a time (after a session, and the pass at start).
 static PROGRESSING: Mutex<()> = Mutex::new(());
 /// A game HowLongToBeat didn't know is looked up again after this long.
 const HLTB_RETRY_MS: u64 = 7 * 24 * 3600 * 1000;
@@ -245,16 +242,16 @@ pub fn record_session(id: &str, secs: u64, ended_at: u64) -> bool {
     true
 }
 
-// ---------- automatic progress ----------
+// ---------- achievements and main-story length ----------
 
-/// Works out a game's progress again (`progress.rs`) and saves it if it moved. May ask the Steam store (achievement
+/// Reads a game's achievements again (`progress.rs`) and saves them if they moved. May ask the Steam store (achievement
 /// count, once) and HowLongToBeat (main story, once); never holds the library lock while it reads files or the network.
 fn update_progress(id: &str) {
     let _one = PROGRESSING.lock().unwrap_or_else(|e| e.into_inner());
     let Some(g) = get(id) else { return };
     let now = scan::ms(SystemTime::now());
     let (mut store_total, mut hltb_sec, mut hltb_at) = (g.achievements_total, g.hltb_main_sec, g.hltb_checked_at);
-    let mut auto = None;
+    let mut achievements = None;
     if let Some(u) = progress::unlocks(&g.folder, g.steam_app_id) {
         if let (None, None, Some(app)) = (u.folder_total, store_total, g.steam_app_id) {
             match steam::achievements_total(&Http::new(), app) {
@@ -262,9 +259,9 @@ fn update_progress(id: &str) {
                 Err(e) => log(&format!("{}: achievement count: {e}", g.name)),
             }
         }
-        auto = progress::from_achievements(u.unlocked, u.folder_total.or(store_total));
+        achievements = progress::achievements(u.unlocked, u.folder_total.or(store_total));
     }
-    if auto.is_none() && g.playtime_sec > 0 {
+    if g.playtime_sec > 0 {
         let due = hltb_at.is_none_or(|t| now.saturating_sub(t) > HLTB_RETRY_MS);
         if hltb_sec.is_none() && due {
             match hltb::main_story(&g.name) {
@@ -274,19 +271,18 @@ fn update_progress(id: &str) {
                 Err(e) => log(&format!("{}: {e}", g.name)),
             }
         }
-        auto = progress::from_playtime(g.playtime_sec, hltb_sec);
     }
     let mut s = state();
     let Some(g) = s.games.iter_mut().find(|g| g.id == id) else { return };
-    let before = (g.auto_progress.clone(), g.achievements_total, g.hltb_main_sec, g.hltb_checked_at);
-    let after = (auto, store_total, hltb_sec, hltb_at);
+    let before = (g.achievements.clone(), g.achievements_total, g.hltb_main_sec, g.hltb_checked_at);
+    let after = (achievements, store_total, hltb_sec, hltb_at);
     if before == after {
         return;
     }
     if before.0 != after.0 {
-        log(&format!("{}: progress {:?}", g.name, after.0));
+        log(&format!("{}: achievements {:?}", g.name, after.0));
     }
-    (g.auto_progress, g.achievements_total, g.hltb_main_sec, g.hltb_checked_at) = after;
+    (g.achievements, g.achievements_total, g.hltb_main_sec, g.hltb_checked_at) = after;
     changed(&s);
 }
 
@@ -843,13 +839,24 @@ mod tests {
     }
 
     #[test]
+    fn a_library_from_0_3_0_loads_without_its_typed_or_estimated_percent() {
+        let old = r#"{"games":[{"id":"a","name":"A","journal":{"rating":4,"progress":70},
+            "autoProgress":{"percent":38,"source":"playtime","typicalSec":216000},"hltbMainSec":216000}]}"#;
+        let saved: Saved = serde_json::from_str(old).unwrap();
+        let g = &saved.games[0];
+        assert_eq!((g.journal.rating, g.achievements.clone(), g.hltb_main_sec), (Some(4), None, Some(216000)));
+        let again = serde_json::to_string(g).unwrap();
+        assert!(!again.contains("\"progress\"") && !again.contains("autoProgress"), "the old figures go at the next save: {again}");
+    }
+
+    #[test]
     fn reviews_are_cleaned_and_join_the_journal() {
         state().games.push(Game { id: "review-test".into(), name: "Review Test".into(), ..Default::default() });
         assert!(!journal_list().iter().any(|g| g.id == "review-test"), "never played, never reviewed");
         let note = format!("  {}  ", "x".repeat(400));
-        let j = Journal { rating: Some(9), status: Some(Status::Completed), progress: Some(140), note: Some(note) };
+        let j = Journal { rating: Some(9), status: Some(Status::Completed), note: Some(note) };
         let g = set_journal("review-test", j).unwrap();
-        assert_eq!((g.journal.rating, g.journal.progress), (Some(5), Some(100)));
+        assert_eq!(g.journal.rating, Some(5));
         assert_eq!(g.journal.note.as_deref().map(str::len), Some(NOTE_MAX));
         assert!(journal_list().iter().any(|g| g.id == "review-test"));
         // 0 stars and a blank note clear them; with nothing left it leaves the journal

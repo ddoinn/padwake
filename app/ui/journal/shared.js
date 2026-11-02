@@ -1,5 +1,5 @@
 // What the Journal tab (library/journal.js) and a game's journal page (journal/journal.js) both draw: statuses,
-// stars, times and dates. A journal is {rating 1–5, status, progress 0–100, note}, each null when not set.
+// stars, times and dates. A journal is {rating 1–5, status, note}, each null when not set.
 
 export const STATUSES = [
   { id: null, label: 'Not set', color: 'rgba(255, 255, 255, .3)' },
@@ -11,22 +11,12 @@ export const STATUSES = [
 ];
 export const statusOf = id => STATUSES.find(s => s.id === (id ?? null)) ?? STATUSES[0];
 export const done = j => j?.status === 'finished' || j?.status === 'completed';
-export const EMPTY = { rating: null, status: null, progress: null, note: null };
+export const EMPTY = { rating: null, status: null, note: null };
 export const NOTE_MAX = 280; // as the host (library::NOTE_MAX)
 
-// How far in a game is: the player's own progress, else the one the app worked out (game.autoProgress: {percent,
-// source: 'achievements' | 'playtime', unlocked, total, typicalSec}). auto: that source, or null for the player's.
-export function progressOf(g) {
-  const own = g?.journal?.progress, auto = g?.autoProgress;
-  if (own != null) return { value: own, auto: null };
-  return auto ? { value: auto.percent, auto } : { value: null, auto: null };
-}
-// where an automatic figure came from: "12 of 51 achievements", "Main story ≈ 27 h"
-export function autoNote(a) {
-  if (!a) return '';
-  if (a.source === 'achievements') return `${a.unlocked} of ${a.total} achievements`;
-  return `Main story ≈ ${Math.max(1, Math.round(a.typicalSec / 3600))} h`;
-}
+// The only percent shown: achievements the game recorded (game.achievements: {unlocked, total}, library/progress.rs).
+// null when it recorded none: no figure, never an estimate.
+export const percentOf = g => (g?.achievements?.total ? Math.round(g.achievements.unlocked * 100 / g.achievements.total) : null);
 
 const STAR_PATH = 'M12 1.8l3.1 6.4 7 .9-5.1 4.9 1.3 6.9L12 17.5l-6.3 3.4 1.3-6.9L1.9 9.1l7-.9z';
 export const STAR = `<svg viewBox="0 0 24 24"><path d="${STAR_PATH}"/></svg>`;

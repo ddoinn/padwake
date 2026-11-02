@@ -9,13 +9,13 @@
 // Buttons: A opens the game's journal page (ui/journal), Up from the first row goes to the tabs, Left to the sort
 // button, LT / RT jump 4 rows.
 
-import { statusOf, done, hours, ago, date, stars, tint, squareArt, STAR, progressOf } from '../journal/shared.js';
+import { statusOf, done, hours, ago, date, stars, tint, squareArt, STAR, percentOf } from '../journal/shared.js';
 
 export const SORTS = [
   { id: 'played', label: 'Recently played' },
   { id: 'most', label: 'Most played' },
   { id: 'rating', label: 'Highest rated' },
-  { id: 'progress', label: 'Most complete' },
+  { id: 'progress', label: 'Most achievements' },
   { id: 'az', label: 'Name (A - Z)' },
 ];
 const X0 = 172, W = 1576, ROW_H = 132, PITCH = 156, LIST_Y = 522, PIN_Y = 436, CLIP_Y = 260, VIEW_H = 1080;
@@ -149,7 +149,7 @@ const ORDER = {
   played: (a, b) => lastSeen(b) - lastSeen(a) || byName(a, b),
   most: (a, b) => (b.playtimeSec ?? 0) - (a.playtimeSec ?? 0) || byName(a, b),
   rating: (a, b) => (b.journal?.rating ?? 0) - (a.journal?.rating ?? 0) || (b.playtimeSec ?? 0) - (a.playtimeSec ?? 0) || byName(a, b),
-  progress: (a, b) => (progressOf(b).value ?? -1) - (progressOf(a).value ?? -1) || byName(a, b),
+  progress: (a, b) => (percentOf(b) ?? -1) - (percentOf(a) ?? -1) || byName(a, b),
   az: byName,
 };
 const sorted = (list, id) => [...list].sort(ORDER[id] ?? ORDER.played);
@@ -192,7 +192,7 @@ function renderRows(fromY, toY) {
 }
 
 function row(i) {
-  const g = entries[i], j = g.journal ?? {}, p = progressOf(g);
+  const g = entries[i], j = g.journal ?? {}, p = percentOf(g);
   const el = document.createElement('div');
   el.className = `jrow${g.removedAt ? ' removed' : ''}${focused && i === index ? ' focus' : ''}`;
   el.dataset.nav = `jrow:${i}`;
@@ -209,7 +209,7 @@ function row(i) {
     <div class="jmeta"></div>
     <div class="jstatus${j.status ? '' : ' unset'}"><b style="background:${st.color}"></b><span>${st.label}</span></div>
     <div class="jstars">${stars(j.rating)}</div>
-    <div class="jprog${p.value == null ? ' unset' : ''}${p.value === 100 ? ' full' : ''}${p.auto ? ' auto' : ''}"><div class="track"><div class="fill" style="width:${p.value ?? 0}%"></div></div><span>${p.value == null ? '— %' : `${p.auto?.source === 'playtime' ? '≈ ' : ''}${p.value} %`}</span></div>`;
+    <div class="jprog${p == null ? ' unset' : ''}${p === 100 ? ' full' : ''}"><div class="track"><div class="fill" style="width:${p ?? 0}%"></div></div><span>${p == null ? '—' : `${p} %`}</span></div>`;
   el.querySelector('.jtitle .n').textContent = g.name;
   el.querySelector('.jmeta').textContent = meta;
   const art = el.querySelector('.jart');

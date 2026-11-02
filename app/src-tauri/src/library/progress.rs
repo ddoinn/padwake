@@ -1,35 +1,19 @@
-//! Automatic progress for the journal: how far into a game the player is, without them saying so.
-//! - Achievements first: a game run from a folder keeps its unlocks in a file its Steam layer writes, keyed by Steam
-//!   app id: `achievements.json` (`{"NAME": {"earned": true}}`) or `achievements.ini` (`[NAME]` with `Achieved=1`), in
-//!   the user's AppData / Public Documents or under the game's folder. Unlocked ÷ total, where the total is the
-//!   folder's `steam_settings\achievements.json` (a list) or the Steam store's count.
-//! - Else playtime ÷ the game's typical main-story length (HowLongToBeat, `hltb.rs`), at most 99 %: only the player
-//!   knows when the story is done.
-//! - The journal's own `progress` (set by the player) always wins; the page shows this one only while that is unset.
+//! The only progress figure the app shows: achievements a game has really recorded on this PC. Nothing here is
+//! estimated, and the player can't set it; a game without an unlock file has no figure.
+//! A game run from a folder keeps its unlocks in a file its Steam layer writes, keyed by Steam app id:
+//! `achievements.json` (`{"NAME": {"earned": true}}`) or `achievements.ini` (`[NAME]` with `Achieved=1`), in the user's
+//! AppData / Public Documents or under the game's folder. The total is the folder's
+//! `steam_settings\achievements.json` (a list) or the Steam store's count.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub enum Source {
-    Achievements,
-    Playtime,
-}
-
-/// What the app worked out. `unlocked`/`total` for achievements, `typical_sec` for playtime.
+/// A game's achievements: `unlocked` of `total`, and `total` is never 0.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct Auto {
-    pub percent: u8,
-    pub source: Source,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub unlocked: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub total: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub typical_sec: Option<u64>,
+pub struct Achievements {
+    pub unlocked: u32,
+    pub total: u32,
 }
 
 /// Unlocks found on disk for a game: how many, and the total its folder lists (if it does).
@@ -44,7 +28,7 @@ const DEPTH: usize = 4;
 /// Folders under the game's folder never worth walking (big, and never hold the files).
 const SKIP: [&str; 6] = ["_commonredist", "redist", "movies", "videos", "paks", "content"];
 
-/// The game's unlocks, or `None` when no achievement file was found (then playtime is used).
+/// The game's unlocks, or `None` when no achievement file was found.
 pub fn unlocks(folder: &Path, store_id: Option<u64>) -> Option<Unlocks> {
     let found = walk(folder);
     let mut ids = found.app_ids;
@@ -61,21 +45,10 @@ pub fn unlocks(folder: &Path, store_id: Option<u64>) -> Option<Unlocks> {
     Some(Unlocks { unlocked, folder_total: found.total })
 }
 
-/// Unlocked ÷ total as a whole percent, at most 100. `None` without a total.
-pub fn from_achievements(unlocked: u32, total: Option<u32>) -> Option<Auto> {
+/// `unlocked` of `total`, at most all of them (a stale list can be short). `None` without a total.
+pub fn achievements(unlocked: u32, total: Option<u32>) -> Option<Achievements> {
     let total = total.filter(|&t| t > 0)?;
-    let percent = ((f64::from(unlocked.min(total)) * 100.0 / f64::from(total)).round()) as u8;
-    Some(Auto { percent, source: Source::Achievements, unlocked: Some(unlocked.min(total)), total: Some(total), typical_sec: None })
-}
-
-/// Playtime ÷ the typical main-story length, at most 99 %. `None` before any play or without a length.
-pub fn from_playtime(played_sec: u64, typical_sec: Option<u64>) -> Option<Auto> {
-    let typical = typical_sec.filter(|&t| t > 0)?;
-    if played_sec == 0 {
-        return None;
-    }
-    let percent = ((played_sec as f64 * 100.0 / typical as f64).round() as u64).min(99) as u8;
-    Some(Auto { percent, source: Source::Playtime, unlocked: None, total: None, typical_sec: Some(typical) })
+    Some(Achievements { unlocked: unlocked.min(total), total })
 }
 
 /// Where Steam layers outside the game's folder keep a game's unlocks.
@@ -192,15 +165,11 @@ mod tests {
     }
 
     #[test]
-    fn percent_from_achievements_and_playtime() {
-        assert_eq!(from_achievements(12, Some(51)).unwrap().percent, 24);
-        assert_eq!(from_achievements(60, Some(51)).unwrap().percent, 100, "a stale schema can't go over 100");
-        assert_eq!(from_achievements(3, None), None);
-        assert_eq!(from_achievements(3, Some(0)), None);
-        assert_eq!(from_playtime(13 * 3600, Some(26 * 3600)).unwrap().percent, 50);
-        assert_eq!(from_playtime(90 * 3600, Some(26 * 3600)).unwrap().percent, 99, "only the player says it's done");
-        assert_eq!(from_playtime(0, Some(3600)), None);
-        assert_eq!(from_playtime(3600, None), None);
+    fn achievements_need_a_total_and_stop_at_it() {
+        assert_eq!(achievements(12, Some(51)), Some(Achievements { unlocked: 12, total: 51 }));
+        assert_eq!(achievements(60, Some(51)), Some(Achievements { unlocked: 51, total: 51 }), "a stale schema can't go over");
+        assert_eq!(achievements(3, None), None);
+        assert_eq!(achievements(3, Some(0)), None);
     }
 
     #[test]

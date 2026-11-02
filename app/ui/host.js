@@ -57,9 +57,9 @@ export const host = {
   },
   // A game: {id, name, folder, exe, art: {tile, background, logo, cover}, tagline, description, screenshots[], trailer,
   // music, news: [{title, url, date, contents}], playtimeSec, lastPlayed, firstPlayed, sessions, journal: {rating 1–5,
-  // status: playing | finished | completed (100 %) | paused | dropped, progress 0–100, note}, addedAt, steamAppId,
-  // autoProgress (the app's own figure, shown while journal.progress is unset: {percent, source: achievements |
-  // playtime, unlocked, total, typicalSec}),
+  // status: playing | finished | completed (100 %) | paused | dropped, note}, addedAt, steamAppId,
+  // achievements ({unlocked, total}, read from the game's files; null when it recorded none), hltbMainSec (the main
+  // story's usual length),
   // and removedAt (a journal entry whose folder is gone: no screenshots, trailer, music or news; restoredAt too if it came
   // from a GitHub backup). Art and media are file
   // paths for fileUrl (square tile, 16:9 background without scrims, transparent logo, portrait cover, 1280 px shots,
@@ -142,7 +142,7 @@ const mockGame = name => ({
   id: slug(name), name, folder: `W:\\games-test\\${name}`, exe: `W:\\games-test\\${name}\\${name.replace(/[^A-Za-z0-9]/g, '')}.exe`,
   art: { tile: null, background: null, logo: null, cover: null }, tagline: null, description: null, screenshots: [],
   trailer: null, music: null, news: [], playtimeSec: 0, lastPlayed: null, firstPlayed: null, sessions: 0,
-  journal: { rating: null, status: null, progress: null, note: null }, addedAt: null, steamAppId: null,
+  journal: { rating: null, status: null, note: null }, addedAt: null, steamAppId: null,
 });
 // ---- the journal (Library → Journal): reviews on some stand-ins, and games whose folders are gone
 const mockKept = [];
@@ -152,7 +152,6 @@ function cleanJournal(j = {}) {
   return {
     rating: j.rating > 0 ? Math.min(5, Math.round(j.rating)) : null,
     status: ['playing', 'finished', 'completed', 'paused', 'dropped'].includes(j.status) ? j.status : null,
-    progress: j.progress == null ? null : Math.max(0, Math.min(100, Math.round(j.progress))),
     note: note || null,
   };
 }
@@ -261,20 +260,22 @@ if (isMock) {
   if (query.get('trailer') === '1') mockTrailer(mockLibrary);
   // ?journal=0: an empty journal
   if (query.get('journal') !== '0') {
-    const review = (id, rating, status, progress, note = null, sessions = 0) => {
+    const review = (id, rating, status, note = null, sessions = 0) => {
       const g = mockLibrary.find(x => x.id === id);
       Object.assign(g, { sessions: sessions || Math.max(1, Math.round(g.playtimeSec / 5400)), firstPlayed: g.lastPlayed && g.lastPlayed - 30 * DAY,
-        journal: { rating, status, progress, note } });
+        journal: { rating, status, note } });
     };
-    review('hades', 5, 'playing', 64, 'One more run. Always one more run. Beat Hades with the Twin Fists on heat 4.');
-    review('celeste', 4, 'finished', 88, 'Chapter 7 broke me, in a good way.');
-    review('god-of-war', 5, 'completed', 100);
-    review('hollow-knight', 3, 'paused', 41);
-    review('cyberpunk-2077', 2, 'dropped', 23, 'Come back after the next big patch.');
-    // the app's own progress (library/progress.rs): Hades from its achievements (the player's 64 % wins), Elden Ring
-    // from playtime only
-    Object.assign(mockLibrary.find(x => x.id === 'hades'), { autoProgress: { percent: 47, source: 'achievements', unlocked: 23, total: 49 } });
-    Object.assign(mockLibrary.find(x => x.id === 'elden-ring'), { autoProgress: { percent: 38, source: 'playtime', typicalSec: 60 * 3600 } });
+    review('hades', 5, 'playing', 'One more run. Always one more run. Beat Hades with the Twin Fists on heat 4.');
+    review('celeste', 4, 'finished', 'Chapter 7 broke me, in a good way.');
+    review('god-of-war', 5, 'completed');
+    review('hollow-knight', 3, 'paused');
+    review('cyberpunk-2077', 2, 'dropped', 'Come back after the next big patch.');
+    // achievements (library/progress.rs): Hades 47 %, God of War all of them, Hollow Knight 32 %; Elden Ring has no
+    // unlock file, only the main story's length
+    Object.assign(mockLibrary.find(x => x.id === 'hades'), { achievements: { unlocked: 23, total: 49 }, hltbMainSec: 22 * 3600 });
+    Object.assign(mockLibrary.find(x => x.id === 'god-of-war'), { achievements: { unlocked: 37, total: 37 } });
+    Object.assign(mockLibrary.find(x => x.id === 'hollow-knight'), { achievements: { unlocked: 20, total: 63 } });
+    Object.assign(mockLibrary.find(x => x.id === 'elden-ring'), { hltbMainSec: 60 * 3600 });
     const kept = (name, hours, days, sessions, journal, hue) => ({
       ...mockGame(name), playtimeSec: Math.round(hours * 3600), lastPlayed: Date.now() - (days + 3) * DAY, firstPlayed: Date.now() - (days + 90) * DAY,
       sessions, addedAt: Date.now() - (days + 120) * DAY, removedAt: Date.now() - days * DAY, journal: cleanJournal(journal),
@@ -283,10 +284,10 @@ if (isMock) {
         : { tile: picture(512, 512, hue), background: picture(960, 540, (hue + 40) % 360, true), logo: null, cover: null },
     });
     mockKept.push(
-      kept('The Witcher 3 Wild Hunt', 118.4, 21, 64, { rating: 5, status: 'completed', progress: 100, note: 'The Bloody Baron is still the best quest I have played.' }, 140),
-      kept('Inside', 4.2, 63, 3, { rating: 4, status: 'finished', progress: 100 }, 20),
-      kept('Death Stranding', 31.7, 140, 22, { rating: 3, status: 'dropped', progress: 45 }, 200),
-      kept('Portal 2', 9.1, 300, 7, { rating: 5, status: 'finished', progress: 90 }, null),
+      kept('The Witcher 3 Wild Hunt', 118.4, 21, 64, { rating: 5, status: 'completed', note: 'The Bloody Baron is still the best quest I have played.' }, 140),
+      kept('Inside', 4.2, 63, 3, { rating: 4, status: 'finished' }, 20),
+      kept('Death Stranding', 31.7, 140, 22, { rating: 3, status: 'dropped' }, 200),
+      kept('Portal 2', 9.1, 300, 7, { rating: 5, status: 'finished' }, null),
     );
   }
 }

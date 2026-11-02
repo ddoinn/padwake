@@ -1,8 +1,8 @@
-//! A game's typical main-story length from HowLongToBeat, for progress from playtime (`progress.rs`).
+//! A game's typical main-story length from HowLongToBeat, shown beside the time played in its journal.
 //! HowLongToBeat has no public API. Its site asks `/api/search/site/init` for a token (tied to the caller's IP and
 //! User-Agent), then POSTs the search with it in `x-auth-token`; a 403 means a stale token. Checked against the live
 //! site on 2026-11-02 ("Hollow Knight": `comp_main` 97162 s). It changes every few months: when it breaks, lookups
-//! fail (logged), progress stays as the player sets it, and it is tried again at the next start or session.
+//! fail (logged), the journal just doesn't show a length, and it is tried again at the next start or session.
 
 use super::steam::norm;
 use serde_json::{json, Value};
