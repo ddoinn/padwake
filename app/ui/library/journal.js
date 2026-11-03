@@ -10,6 +10,7 @@
 // button, LT / RT jump 4 rows.
 
 import { statusOf, done, hours, ago, date, stars, tint, squareArt, STAR, percentOf } from '../journal/shared.js';
+import { earned as trophies } from '../journal/trophies.js';
 
 export const SORTS = [
   { id: 'played', label: 'Recently played' },
@@ -162,6 +163,7 @@ function totals() {
     [h ? `${h.toLocaleString()}<small> h</small>` : `${Math.round(sec / 60)}<small> min</small>`, 'Time played'],
     [String(entries.length), entries.length === 1 ? 'Game' : 'Games'],
     [String(entries.filter(g => done(g.journal)).length), 'Finished'],
+    [String(entries.reduce((n, g) => n + trophies(g).length, 0)), 'Trophies'],
     [rated.length ? `${(rated.reduce((s, r) => s + r, 0) / rated.length).toFixed(1)}<small class="st">${STAR}</small>` : '—', 'Average rating'],
   ];
 }

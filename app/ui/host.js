@@ -51,7 +51,7 @@ export const host = {
     session: () => call('games', 'session'),      // {id, kind, name, front: 'game' | 'app', startedAt, ready} or null
     overReady: () => call('games', 'over_ready'), // the still is on screen: the host may show the window (Guide tap over a game)
     backdrop: size => call('games', 'backdrop', { size }), // ArrayBuffer: a BMP of the screen as Guide was pressed over the game; size 'small' (half) | 'full'
-    // screenshots taken with View while a game was in front, newest first: [{game, name, path, thumb (480 px), takenAt}]
+    // screenshots taken with Guide + View while a game was in front, newest first: [{game, name, path, thumb (480 px), takenAt}]
     captures: () => call('games', 'captures'),
     deleteCapture: path => call('games', 'delete_capture', { path }),
   },
@@ -104,7 +104,8 @@ export const host = {
   startup: {
     withWindows: () => call('startup', 'with_windows'),             // the "Padwake" logon task exists
     setWithWindows: on => call('startup', 'set_with_windows', { on }), // resolves with the new state
-    info: () => call('startup', 'info'), // {restarted}: true when the watchdog started the app again after a crash
+    info: () => call('startup', 'info'), // {restarted}: true when the app restarted mid-sitting: no start screen
+    note: text => call('startup', 'note', { text }), // a line for the log (what dismissed the start screen, and when)
   },
   media: {
     list: () => call('media', 'list'),
@@ -173,7 +174,8 @@ function mockExit(id) {
   }
   mockRunning = null;
   emit('library', mockLibrary);
-  emit('game', { id, kind: mockSession?.kind ?? 'game', state: 'exited', front: mockSession?.front ?? 'game' });
+  emit('game', { id, kind: mockSession?.kind ?? 'game', state: 'exited', front: mockSession?.front ?? 'game',
+    played: Math.round((Date.now() - mockSession.startedAt) / 1000) });
 }
 // as the host does on Guide over a running game: 'over', then the guide event (tests: window.__mock.guideOverGame('tap'))
 function mockGuideOverGame(kind = 'tap') {
@@ -458,6 +460,7 @@ const MOCK = {
     with_windows: () => mockSystem.withWindows,
     set_with_windows: ({ on }) => (mockSystem.withWindows = !!on),
     info: () => ({ restarted: query.get('restarted') === '1' }), // ?restarted=1: as after a crash
+    note: ({ text }) => { (window.__notes ??= []).push(text); return null; },
   },
   // ---- updates and backup: ?update=ready (a downloaded 0.2.0) | latest | error, ?updated=1 (this start came from an
   // update), ?backup=signed-in | unavailable, ?signInMs= (how long the player takes to type the code; default 4 s)

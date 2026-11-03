@@ -6,13 +6,14 @@
 // editable rows from y 452 (900 wide): Your rating, Status, Your note; Forget this game for a removed one. On the right
 // a card (x 1288–1748) with the square art and the facts the app recorded, which nobody can edit: achievements (the
 // only percent, game.achievements), time played, sessions, first and last played, added, the main story's usual
-// length or when it was removed.
+// length or when it was removed. Under the rows, Padwake's trophies (trophies.js), which nothing can change: y 900–992.
 // Buttons: Up / Down move between rows; Left / Right change the rating (0–5 stars) or the status; A on the rating or
 // status steps it, on the note opens the keyboard, on Forget asks once more. Each change is saved 300 ms after the last
 // one, and at once when the page closes.
 
 import * as keyboard from '../keyboard/keyboard.js';
 import { STATUSES, statusOf, EMPTY, NOTE_MAX, hours, date, ago, stars, tint, squareArt, percentOf } from './shared.js';
+import { TROPHIES, earned, CUP } from './trophies.js';
 
 const FRAME = 1000 / 60;
 const ROWS_Y = 452, ROW_H = 88, PITCH = 100, NOTE_H = 136, ROW_W = 900, X0 = 172;
@@ -43,11 +44,12 @@ export default {
         <div class="jpname"><img class="logo" alt=""><div class="text"></div></div>
         <div class="jpline"></div>
         <div class="jprows"></div>
+        <div class="jptrophies"></div>
         <div class="jpring"></div>
         <div class="jphint"></div>
         <div class="jpcard"><div class="art"></div><div class="ach"><div class="l">Achievements</div><div class="v"></div><div class="track"><div class="fill"></div></div></div><div class="facts"></div></div>
       </div>`;
-    for (const k of ['jpbg', 'jpage', 'jphead', 'jpname', 'jpline', 'jprows', 'jpring', 'jphint', 'jpcard']) $[k] = el.querySelector(`.${k}`);
+    for (const k of ['jpbg', 'jpage', 'jphead', 'jpname', 'jpline', 'jprows', 'jptrophies', 'jpring', 'jphint', 'jpcard']) $[k] = el.querySelector(`.${k}`);
     $.bgimg = $.jpbg.querySelector('img');
     $.icon = $.jphead.querySelector('.icon');
     $.logo = $.jpname.querySelector('.logo');
@@ -141,8 +143,15 @@ function show(g) {
   focusRow(0, true);
 }
 
+function paintTrophies() {
+  const have = new Set(earned(game).map(t => t.id));
+  $.jptrophies.innerHTML = `<div class="head"><div class="t">Trophies</div><div class="count">${have.size} of ${TROPHIES.length}</div></div>`
+    + TROPHIES.map(t => `<div class="tr ${t.tier}${have.has(t.id) ? ' on' : ''}"><div class="cup">${CUP}</div><div class="n">${t.name}</div><div class="g">${t.goal}</div></div>`).join('');
+}
+
 function paintFacts() {
   const g = game;
+  paintTrophies();
   const pct = percentOf(g);
   $.ach.classList.toggle('none', pct == null);
   $.ach.classList.toggle('full', pct === 100);

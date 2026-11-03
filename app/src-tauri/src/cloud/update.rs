@@ -28,6 +28,8 @@ const EXE_LIMIT: u64 = 200 << 20;
 const FIRST_CHECK: Duration = Duration::from_secs(60);
 const EVERY: Duration = Duration::from_secs(6 * 3600);
 pub const UPDATE_FROM: &str = "--update-from";
+/// With `UPDATE_FROM`: installed as the app started (the PC just came on), not from Settings. The start screen stays.
+pub const UPDATED_AT_START: &str = "--updated-at-start";
 pub const UPDATED_FROM: &str = "--updated-from";
 
 #[derive(Serialize, Clone, Copy, PartialEq, Debug, Default)]
@@ -300,13 +302,14 @@ fn swap(d: &Path, exe: &Path) -> Result<Option<String>, String> {
 
 /// Installs the staged update into this exe and starts it once this process has ended. True if it did: the caller
 /// must exit now.
-fn install_and_relaunch() -> Result<bool, String> {
+fn install_and_relaunch(at_start: bool) -> Result<bool, String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let Some(version) = swap(&dir(), &exe)? else { return Ok(false) };
     log(&format!("update: installed {version} over {CURRENT}; starting it"));
     let dir = exe.parent().map(Path::to_path_buf).unwrap_or_default();
     Command::new(&exe)
         .args([UPDATE_FROM, &std::process::id().to_string(), UPDATED_FROM, CURRENT])
+        .args(at_start.then_some(UPDATED_AT_START))
         .current_dir(dir)
         .spawn()
         .map_err(|e| format!("starting the new version: {e}"))?;
@@ -319,7 +322,7 @@ pub fn install_at_start() -> bool {
     if cfg!(debug_assertions) {
         return false;
     }
-    match install_and_relaunch() {
+    match install_and_relaunch(true) {
         Ok(go) => go,
         Err(e) => {
             log(&format!("update: couldn't install at start: {e}"));
@@ -333,7 +336,7 @@ pub fn install<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     if crate::games::is_running() {
         return Err("Close the game first.".into());
     }
-    if !install_and_relaunch()? {
+    if !install_and_relaunch(false)? {
         return Err("No update is ready.".into());
     }
     app.exit(0);

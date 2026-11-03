@@ -1,4 +1,4 @@
-// Media Gallery (row A17): the screenshots taken with View while a game ran (host.games.captures), newest first. View
+// Media Gallery (row A17): the screenshots taken with Guide + View while a game ran (host.games.captures), newest first. View
 // on Home opens it over Home (app.push); B goes back to where Home was.
 // Layout (stage px), as the Game Library: the glyph at (68, 70), "Media Gallery" x 172 cap 77; "All: N" x 172 cap 288;
 // 16:9 thumbnails four across, 376 × 212 at x 172 + 400 c, y 338 + 236 r; the focus ring 3 px, 3 px outside, with
@@ -45,7 +45,7 @@ export default {
         <div class="gring"></div>
       </div></div>
       <div class="gempty"><div class="msg">No captures yet</div>
-        <div class="sub">Press View on your controller while you play to save a screenshot of the game. They show up here.</div></div>
+        <div class="sub">Press Guide + View on your controller while you play to save a screenshot of the game. They show up here.</div></div>
       <div class="ghead"><div class="gicon">${ICON}</div><div class="gtitle">Media Gallery</div></div>
       <div class="gv" data-nav="viewer"><div class="gdim"></div><div class="gpic"><img alt=""></div><div class="gpic"><img alt=""></div>
         <div class="gvhead"><span class="gvname"></span><span class="gvcount"></span></div></div>

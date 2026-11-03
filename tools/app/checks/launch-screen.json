@@ -1,0 +1,19 @@
+[
+  {"wait": 1000},
+  {"eval": "(() => { const g = __mock.library.find(g => g.id === __home.state().item); const c = Object.assign(document.createElement('canvas'), {width: 640, height: 360}); const x = c.getContext('2d'); x.fillStyle = '#346'; x.fillRect(0, 0, 640, 360); g.art.background = c.toDataURL('image/jpeg'); g.playtimeSec = 151200; g.lastPlayed = Date.now() - 2 * 864e5; __mock.emit('library', __mock.library); return g.id; })()"},
+  {"wait": 600},
+  {"key": "Enter"},
+  {"wait": 700},
+  {"assert": "document.querySelector('#screen-home .navy.loading.hasart .lart').currentSrc", "why": "the launch screen keeps the game's art"},
+  {"assert": "getComputedStyle(document.querySelector('#screen-home .lstatus')).opacity === '0'", "why": "no spinner in the first moment: a game that is up at once never shows one"},
+  {"wait": 1500},
+  {"assert": "getComputedStyle(document.querySelector('#screen-home .lstatus')).opacity === '1'", "why": "the spinner comes after a moment"},
+  {"assert": "document.querySelector('#screen-home .lmeta').textContent.startsWith('42 h played')", "why": "the player's history shows"},
+  {"assert": "getComputedStyle(document.querySelector('#screen-home .lhint')).opacity === '0'", "why": "the hint waits"},
+  {"shot": "launch-screen"},
+  {"wait": 18800},
+  {"assert": "getComputedStyle(document.querySelector('#screen-home .lhint')).opacity === '1'", "why": "a long load says how to get out"},
+  {"shot": "launch-screen-long"},
+  {"eval": "document.dispatchEvent(new Event('visibilitychange')); 'no change while the page shows'"},
+  {"assert": "document.querySelector('#screen-home .navy').classList.contains('loading')", "why": "only hiding stops it"}
+]

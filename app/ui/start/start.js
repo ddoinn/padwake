@@ -9,7 +9,9 @@
 //   (background/spotlight.js: the PS5's near-black right side and floor haze) and is unloaded. A waiting prompt is
 //   then the spotlight's 2 Hz steps plus the bokeh's 8 Hz canvas: ≈7 % GPU, 1.3 % CPU on the Avita (sparkle.js).
 // - Any press during the light show jumps to the prompt (the video to 3.3 s). A press on the prompt, from 300 ms after
-//   it shows, plays the start chord and reveals Home.
+//   it shows, plays the start chord and reveals Home. A press is a button or a key: a stick isn't (a virtual pad can
+//   come up off centre), and with Cloud PC Mode nor is a mouse click, because the prompt waits while the PC boots and
+//   the click that focuses the stream on the other device reaches it before the picture does.
 // - The prompt follows design/ps5/1-home.md §1.1: 30 px Light, centred, cap 235–255; a white Ø86 disc at (960, 563)
 //   with our controller glyph; a glow out to r≈80 that flares and decays over 1.4 s every 3.3 s, 4 times only (an
 //   endless loop would cost all the time the prompt waits).
@@ -19,10 +21,13 @@
 //   (+1300 ms). Home's own elements carry Web Animations that end with the reveal, so Home is left exactly as it
 //   draws itself, and this screen sits behind Home meanwhile, so the row comes in over the spotlight.
 // - Then this screen leaves the stack: the bokeh, the spotlight and the video are dropped, and nothing of it runs.
-// A restart after a crash or an update (host.startup.info().restarted) goes straight to Home.
+// A restart mid-sitting (host.startup.info().restarted: Update and Restart, a crash on a PC on for a while) goes
+// straight to Home. Each dismissal goes in the log (host.startup.note), which says why a start screen wasn't seen.
 
 import { sparkle } from './sparkle.js';
 import { mount as spotlight } from '../background/spotlight.js';
+import { settings } from '../input/input.js';
+import { isCloudPc } from '../cloud-pc.js';
 
 const FRAME = 1000 / 60;
 const PROMPT_AT = 3300;                   // ms into the light show: the beam is lit
@@ -85,12 +90,24 @@ export default {
   },
 
   action(name, e = {}) {
-    const press = !e.held && !['release', 'point', 'wheel'].includes(name);
-    if (press && phase === 'intro') { showPrompt(PROMPT_SKIP_IN, true); return 'none'; }
-    if (press && phase === 'prompt' && performance.now() - promptAt >= PRESS_GUARD) { reveal(); return 'start'; }
+    const stray = e.source === 'stick' || (e.source === 'mouse' && isCloudPc(settings));
+    const press = !stray && !e.held && !['release', 'point', 'wheel'].includes(name);
+    if (press && phase === 'intro') {
+      note(`skipped the light show with ${name} (${e.source})`);
+      showPrompt(PROMPT_SKIP_IN, true);
+      return 'none';
+    }
+    if (press && phase === 'prompt' && performance.now() - promptAt >= PRESS_GUARD) {
+      note(`dismissed with ${name} (${e.source}), ${((performance.now() - promptAt) / 1000).toFixed(1)} s after the prompt showed`);
+      reveal();
+      return 'start';
+    }
+    if (stray && name === 'click') note('ignored a mouse click (Cloud PC Mode)');
     return name === 'b' ? 'none' : false; // B too, or the input layer would pop this screen
   },
 };
+
+const note = text => { host.startup.note(text).catch(() => {}); };
 
 async function boot(params) {
   phase = 'boot';

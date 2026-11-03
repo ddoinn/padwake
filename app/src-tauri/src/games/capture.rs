@@ -1,4 +1,4 @@
-//! Captures (decision 5: View = screenshot): View while a game is in front saves the screen as a JPEG in
+//! Captures: Guide + View while a game is in front saves the screen as a JPEG in
 //! `data\captures\<game id>\`, with a 480 px thumbnail beside it, and toasts "Screenshot saved." over the game. The
 //! Media Gallery (`ui/gallery`) lists them.
 //! - The copy is the BitBlt Control Center's still uses (`backdrop.rs`), with our toast windows left out. Exclusive

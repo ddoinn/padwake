@@ -92,10 +92,13 @@ struct GameEvent<'a> {
     /// on "exited": who was in front as it ended ("app": Home was already showing over it)
     #[serde(skip_serializing_if = "Option::is_none")]
     front: Option<Front>,
+    /// on "exited" of a session that ran: how long, in seconds (the page's session recap)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    played: Option<u64>,
 }
 
 fn emit<R: Runtime>(app: &AppHandle<R>, id: &str, kind: Kind, state: &str, show: Option<&str>) {
-    let _ = app.emit("game", GameEvent { id, kind, state, show, front: None });
+    let _ = app.emit("game", GameEvent { id, kind, state, show, front: None, played: None });
 }
 
 /// What `games|session` returns.
@@ -280,15 +283,17 @@ pub fn guide_down<R: Runtime>(app: &AppHandle<R>) {
     *PRESS_STILL.lock().unwrap_or_else(|e| e.into_inner()) = Some((Instant::now(), took));
 }
 
-/// View from the pad thread: while a game's window is in front (the app asleep), a screenshot (`capture.rs`). True if
-/// it took one; otherwise the page gets View as usual.
-pub fn view_pressed<R: Runtime>(app: &AppHandle<R>) -> bool {
+/// Guide + View from the pad thread: while a game's window is in front (the app asleep), a screenshot (`capture.rs`).
+/// Guide going down woke the page for a tap that isn't coming, so it goes back to sleep. True if it took one; that
+/// Guide press then counts for nothing else.
+pub fn screenshot<R: Runtime>(app: &AppHandle<R>) -> bool {
     let (id, name) = match live().as_ref() {
         Some(l) if l.front == Front::Game && l.kind == Kind::Game => (l.id.clone(), l.name.clone()),
         _ => return false,
     };
     let tile = crate::library::get(&id).and_then(|g| g.art.tile);
     capture::take(app, &id, &name, tile);
+    sleep(app);
     true
 }
 
@@ -398,7 +403,7 @@ fn end<R: Runtime>(app: &AppHandle<R>) {
     backdrop::clear();
     window::on_top(app, false);
     wake(app);
-    let _ = app.emit("game", GameEvent { id: &l.id, kind: l.kind, state: "exited", show: None, front: Some(l.front) });
+    let _ = app.emit("game", GameEvent { id: &l.id, kind: l.kind, state: "exited", show: None, front: Some(l.front), played: Some(secs) });
 }
 
 /// A window of another process came to the front. The session's first one means the game is up: "Ready to play".
@@ -466,7 +471,7 @@ fn session() -> Option<Session> {
     current()
 }
 
-/// Screenshots taken with View, newest first: [{game, name, path, thumb, takenAt}].
+/// Screenshots taken with Guide + View, newest first: [{game, name, path, thumb, takenAt}].
 #[tauri::command]
 async fn captures() -> Vec<capture::Capture> {
     let names = |id: &str| crate::library::get(id).or_else(|| crate::library::kept(id)).map(|g| g.name);

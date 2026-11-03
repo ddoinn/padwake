@@ -34,7 +34,8 @@ Windows keeps its own prompts (an administrator or firewall question) in front o
 
 At each start you see the light show, then "Press any button on your controller"; any button skips the light show.
 
-If Padwake crashes, or is ended in Task Manager, it starts again within a few seconds and goes straight to Home.
+If Padwake crashes, or is ended in Task Manager, it starts again within a few seconds and goes straight to Home. In the
+first 10 minutes after the PC comes on it shows the start screen again instead.
 
 ## 5. Sign in without a password
 
@@ -68,7 +69,8 @@ the Windows desktop. To come back, start `padwake.exe` again, or sign out and in
 
 ## 8. Screenshots
 
-Press **View** (the button with two squares) while you play to save a screenshot of the game; a toast confirms it.
+Press **Guide + View** (View is the button with two squares) while you play to save a screenshot of the game; a toast
+confirms it. **View** on its own stays the game's button, for maps and scoreboards.
 On Home, **View** opens the **Media Gallery** with every screenshot, newest first: **A** shows one full screen, **X**
 deletes it. They are JPEG files in `data\captures`, one folder per game. Games that run in exclusive full screen or play
 protected video copy as black; Padwake says so instead of saving a black picture.
@@ -110,9 +112,22 @@ Padwake only shows a percentage it can read from the game: the achievements you 
 after each session. It can't be typed in, and it isn't a guess. A game that keeps no achievements on the PC shows no
 percentage, only your time played and, when HowLongToBeat knows the game, how long its main story usually takes.
 
-## 12. Cloud PCs (AntCloud)
+When you come back to Home after a session of a minute or more, a toast says how long you played, and another says how
+many achievements the game recorded, if any.
+
+## 12. Trophies
+
+Every game has the same six Padwake trophies, on its Journal page. They come from what Padwake counts itself: bronze for
+your first play and 10 sessions, silver for 10 hours and 50 sessions, gold for 50 and 100 hours. A toast tells you when
+you come back to Home. They need no account or network, nothing you set can earn one, and a restored backup brings them
+back. They are separate from a game's own achievements.
+
+## 13. Cloud PCs (AntCloud)
 
 An AntCloud PC doesn't turn off from Windows. Turn on **Settings → Power → Cloud PC Mode**: Shut Down becomes
 **End Session**, which shows what to press on the device you stream from (Ctrl + F9 in the AntCloud app, F9 in a
 browser, then **Shut Down PC**), and Sleep is turned off. Padwake can't press those keys for you; they only work on
 your device.
+
+With Cloud PC Mode on, a mouse click doesn't dismiss "Press any button", so the click that focuses the stream leaves it
+waiting for you. `data\padwake.log` records each start and what dismissed the screen.

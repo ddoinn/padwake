@@ -99,7 +99,10 @@ export default {
     root = el;
     el.innerHTML = `
       <div class="bgwrap"><div class="bg"><div class="layer"></div><div class="layer"></div></div><div class="scrim"></div><div class="dim"></div></div>
-      <div class="navy"><div class="lglow"></div><div class="lmark"><img class="llogo" alt=""><div class="lname"></div></div><div class="lbar"><i></i></div></div>
+      <div class="navy"><div class="lglow"></div><img class="lart" alt=""><div class="lscrim"></div>
+        <div class="lmark"><img class="llogo" alt=""><div class="lname"></div><div class="lmeta"></div></div>
+        <div class="lstatus"><svg viewBox="0 0 40 40"><circle class="ltrack" cx="20" cy="20" r="16"/><circle class="larc" cx="20" cy="20" r="16"/></svg><span>Loading</span></div>
+        <div class="lhint">Taking a while? Press Guide to close it.</div></div>
       <div class="ui">
         <div class="top">
           <span class="tab sel" data-nav="tab:games">Games</span><span class="tab" data-nav="tab:media">Media</span>
@@ -1487,7 +1490,7 @@ function track(a) {
   return a;
 }
 
-// UI fades out (167 ms), the art holds (300 ms), the navy screen cross-fades in (200 ms), then the game starts
+// UI fades out (167 ms), the art holds (300 ms), the launch screen cross-fades in over it (200 ms), then the game starts
 function launch(g) {
   if (!g) return false;
   if (running === g.id) return resume();
@@ -1514,25 +1517,36 @@ function launch(g) {
   return true;
 }
 
-// The navy screen while the game loads: its logo (or name) rises in as the navy arrives, a slow glow drifts behind it
-// and a thin bar sweeps under it (home.css). `.loading` runs those animations; `blackout` takes it off, so nothing
-// animates once the app sleeps or comes back.
+// The launch screen while the game loads: Home's background art stays and slowly pushes in as the UI melts away, the
+// logo (or name) and the player's history rise in at Home's hero column, and a spinner comes at the lower right if the
+// game takes more than a moment (home.css). Without art it is the navy with a glow. `.loading` runs those animations;
+// `loadingDone` takes it off, so nothing animates once the app sleeps or comes back.
 function loadingScreen(g) {
-  const navy = $.navy, logo = navy.querySelector('.llogo'), name = navy.querySelector('.lname');
-  const src = g.art?.logo ? host.fileUrl(g.art.logo) : null;
-  navy.classList.toggle('haslogo', !!src);
-  name.textContent = g.name;
-  if (src) {
-    logo.src = src;
-    logo.decode().catch(() => navy.classList.remove('haslogo'));
-  } else logo.removeAttribute('src');
+  const navy = $.navy;
+  const show = (img, src, cls) => {
+    navy.classList.toggle(cls, !!src);
+    if (src) {
+      img.src = src;
+      img.decode().catch(() => navy.classList.remove(cls));
+    } else img.removeAttribute('src');
+  };
+  show(navy.querySelector('.lart'), g.art?.background ? host.fileUrl(g.art.background) : null, 'hasart');
+  show(navy.querySelector('.llogo'), g.art?.logo ? host.fileUrl(g.art.logo) : null, 'haslogo');
+  navy.querySelector('.lname').textContent = g.name;
+  navy.querySelector('.lmeta').textContent = [g.playtimeSec && playtime(g.playtimeSec),
+    g.lastPlayed && `Last played ${ago(g.lastPlayed)}`].filter(Boolean).join('  ·  ');
   navy.classList.remove('loading');
   void navy.offsetWidth; // restart the keyframes for a second launch
   navy.classList.add('loading');
 }
+// Stops the launch screen's motion and lets its art go.
+function loadingDone() {
+  $.navy?.classList.remove('loading');
+  $.navy?.querySelector('.lart').removeAttribute('src');
+}
 // The app hides (and WebView2 suspends) once the game fills the screen. Hidden, the launch screen stops moving: that
 // holds even if a suspend fails, so nothing of it runs while a game plays.
-document.addEventListener('visibilitychange', () => { if (document.hidden) $.navy?.classList.remove('loading'); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) loadingDone(); });
 
 // Another game runs: offer to close it and play this one. Its close is the usual (asked, ended after 5 s); this one
 // starts when it has exited (gameEvent).
@@ -1568,7 +1582,7 @@ function blackout() {
   for (const el of [$.top, $.rowwrap, $.herowrap, $.bgwrap]) setStyle(el, 'opacity', 0, 0);
   $.ui.style.opacity = 1;
   $.navy.style.opacity = 0;
-  $.navy.classList.remove('loading');
+  loadingDone();
   dark = true;
 }
 

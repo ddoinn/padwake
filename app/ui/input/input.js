@@ -53,10 +53,11 @@ const DIRS = ['up', 'down', 'left', 'right'];
 const PAD_BUTTONS = ['a', 'b', 'x', 'y', 'lb', 'rb', 'lt', 'rt', 'menu', 'view'];
 const MOVES = new Set([...DIRS, 'lb', 'rb', 'lt', 'rt', 'point']);
 const SOUND_OF = { a: 'select', click: 'select', menu: 'select', x: 'select', y: 'select', view: 'select', b: 'back' };
-const SOUNDS = { move: ['navigation', 1, 0.7], select: ['activation', 1, 0.8], back: ['navigation', 0.8, 0.7], start: ['start', 1, 0.8] };
+const SOUNDS = { move: ['navigation', 1, 0.7], select: ['activation', 1, 0.8], back: ['navigation', 0.8, 0.7], start: ['start', 1, 0.8],
+  'trophy-bronze': ['trophy', 0.9, 0.8], 'trophy-silver': ['trophy', 1, 0.85], 'trophy-gold': ['trophy', 1.12, 0.9] };
 
 let app, host;
-const settings = { rumble: true, uiSounds: true };
+export const settings = { rumble: true, uiSounds: true };
 export const inputState = { sounds: 0, rumbles: 0, lastSound: null }; // counters for tests
 
 export function startInput(h, a) {
@@ -69,7 +70,7 @@ export function startInput(h, a) {
   startPad();
   startMouse();
   host.on('guide', ({ kind }) => guide(kind));
-  window.__input = { state: inputState, settings, runDistance, RUN, HOLD_MS };
+  window.__input = { state: inputState, settings, runDistance, RUN, HOLD_MS, audio: () => ctx?.state, loaded: () => Object.keys(buffers) };
 }
 
 // ---------- dispatch and feedback ----------
@@ -258,7 +259,7 @@ function startAudio() {
     console.warn('no Web Audio', e);
     return;
   }
-  for (const name of ['navigation', 'activation', 'start']) {
+  for (const name of ['navigation', 'activation', 'start', 'trophy']) {
     fetch(`./assets/sounds/${name}.wav`).then(r => r.arrayBuffer()).then(b => ctx.decodeAudioData(b))
       .then(buf => { buffers[name] = buf; }).catch(e => console.warn('sound', name, e));
   }

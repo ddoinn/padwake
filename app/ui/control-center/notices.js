@@ -2,11 +2,13 @@
 // - notifications: games added, from `library` events (plus the last three days' additions at start, without toasts)
 // - the running session, from `game` events, and whether the app just woke over it after Guide (`over`)
 // - the toasts: "<game> / Was added to your library." and "Ready to play." when the app shows over a game that came up;
-//   "System Software" when an update is ready, and after the app was updated
+//   "System Software" when an update is ready, and after the app was updated; the session recap as a game ends
 // Control Center reads `notices`, `session` and `takeOver()`.
 
 import { host } from '../host.js';
 import { toast } from './toast.js';
+import { playSound } from '../input/input.js';
+import { newlyEarned, tierName, TIER_COLOR } from '../journal/trophies.js';
 
 const DAY = 864e5;
 export const notices = [];                 // newest first: {id, name, tile, at}
@@ -37,8 +39,56 @@ function added(list = []) {
   listeners.forEach(fn => fn());
 }
 
-function game({ id, kind, state, show }) {
-  if (state === 'launching' || state === 'running') Object.assign(session, { id, kind });
+// The session recap, back on Home: how long it was (the host's own count; under a minute isn't a session), the trophies
+// it earned (journal/trophies.js), then the achievements it added, as the host reads them just after a game ends. Only
+// what the game's files say: with no count from before the session, a first read of old unlocks isn't "new". Nothing
+// over the next game's launch screen.
+const RECAP_MIN_SEC = 60;
+const RECAP_AFTER_MS = 900;     // Home's return motion has settled
+const RECAP_READ_MS = 30000;    // the read may ask the network once; later changes aren't this session's
+let recap = null;               // {id, before, numbers, until}: the session being watched for its achievements
+
+export function playedFor(sec) {
+  const min = Math.round(sec / 60), h = Math.floor(min / 60), m = min % 60;
+  return `You played for ${h ? `${h} h${m ? ` ${m} min` : ''}` : `${min} min`}.`;
+}
+
+function recapToast(g, message) {
+  toast({ title: g?.name ?? recap?.id, message, icon: g?.art?.tile ? host.fileUrl(g.art.tile) : null });
+}
+
+function recapPlayed(id, played, numbers) {
+  const after = { playtimeSec: numbers.playtimeSec + played, sessions: numbers.sessions + 1 };
+  setTimeout(() => {
+    if (session.id) return;
+    const g = gameById(id);
+    if (played >= RECAP_MIN_SEC) recapToast(g, playedFor(played));
+    for (const t of newlyEarned(numbers, after)) {
+      toast({ title: g?.name ?? id, message: `${tierName(t)} trophy: ${t.name}.`, icon: 'glyph:trophy', color: TIER_COLOR[t.tier],
+        trophy: t.tier, onShow: () => playSound(`trophy-${t.tier}`) });
+    }
+  }, RECAP_AFTER_MS);
+}
+
+function recapAchievements() {
+  if (!recap) return;
+  if (performance.now() > recap.until) { recap = null; return; }
+  const g = gameById(recap.id), n = (g?.achievements?.unlocked ?? 0) - (recap.before ?? Infinity);
+  if (n > 0) {
+    recapToast(g, n === 1 ? '1 new achievement.' : `${n} new achievements.`);
+    recap = null;
+  }
+}
+
+function game({ id, kind, state, show, played }) {
+  if (state === 'launching' || state === 'running') {
+    Object.assign(session, { id, kind });
+    // once per session (it gets both events); a recap left from this game's last session starts over
+    if (kind === 'game' && !(recap?.id === id && recap.until === Infinity)) {
+      const g = gameById(id);
+      recap = { id, before: g?.achievements?.unlocked ?? null, numbers: { playtimeSec: g?.playtimeSec ?? 0, sessions: g?.sessions ?? 0 }, until: Infinity };
+    }
+  }
   if (state === 'over') {
     session.over = { show, at: performance.now(), wall: Date.now() };
     // Control Center over the game: fetch the still now (the host sends this before the window shows): half size
@@ -54,7 +104,15 @@ function game({ id, kind, state, show }) {
     const g = kind === 'media' ? library.media.find(m => m.id === id) : gameById(id);
     toast({ title: g?.name ?? id, message: 'Ready to play.', icon: g?.art?.tile ? host.fileUrl(g.art.tile) : null });
   }
-  if (state === 'exited') { dropPreStill(); Object.assign(session, { id: null, kind: null, over: null, still: null, stillFull: null }); }
+  if (state === 'exited') {
+    dropPreStill();
+    Object.assign(session, { id: null, kind: null, over: null, still: null, stillFull: null });
+    if (kind === 'game' && played != null && recap?.id === id) {
+      recap.until = performance.now() + RECAP_READ_MS;
+      recapPlayed(id, played, recap.numbers);
+      recapAchievements(); // its read may have finished before this event
+    } else if (recap?.id === id) recap = null;
+  }
 }
 
 // the library as last sent, and the Media entries (row A12: {id, name, art}), for Control Center (it may open before
@@ -173,7 +231,7 @@ host.cloud?.update().then(u => {
   else if (u.state === 'ready' && was !== 'ready') ready(u);
 }).catch(() => {});
 
-host.on('library', list => { library.games = list ?? []; added(library.games); });
+host.on('library', list => { library.games = list ?? []; added(library.games); recapAchievements(); });
 host.on('game', game);
 host.on('game', ({ kind, state }) => { if (kind === 'media' && state === 'launching') mediaList(); });
 mediaList();

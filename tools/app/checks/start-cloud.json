@@ -1,0 +1,19 @@
+[
+  {"wait": 5000},
+  {"assert": "__start.state().phase === 'prompt'", "why": "the PC came on and nobody is watching yet: the prompt waits"},
+  {"eval": "__app.host.settings.set({cloudPc: true}).then(() => __mock.settings.cloudPc)"},
+  {"eval": "document.querySelector('#screen-start').dispatchEvent(new PointerEvent('pointerdown', {bubbles: true, button: 0, pointerId: 1}))"},
+  {"wait": 200},
+  {"assert": "__start.state().phase === 'prompt'", "why": "Cloud PC Mode: the click that focuses the stream leaves the prompt up"},
+  {"assert": "__notes.includes('ignored a mouse click (Cloud PC Mode)')", "why": "the log says a click was ignored"},
+  {"emit": "input", "payload": {"lx": 1, "ly": 0}},
+  {"wait": 150},
+  {"emit": "input", "payload": {"lx": 0, "ly": 0}},
+  {"wait": 150},
+  {"assert": "__start.state().phase === 'prompt'", "why": "a stick isn't a button"},
+  {"shot": "start-cloud-prompt"},
+  {"emit": "input", "payload": {"a": true, "lx": 0, "ly": 0}},
+  {"wait": 200},
+  {"assert": "__start.state().phase === 'reveal'", "why": "a button dismisses it"},
+  {"assert": "__notes.some(n => n.startsWith('dismissed with a (pad)'))", "why": "the log says what dismissed it, and when"}
+]

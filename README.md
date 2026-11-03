@@ -20,8 +20,8 @@ Built with **Rust + Tauri**. Blazing-fast navigation. Made for a controller.
 - **Your games, in one place.** Pick a folder. Padwake finds games, fetches artwork, screenshots and trailers, and tracks playtime.
 - **Get straight to playing.** Launch a game; the window hides and WebView2 suspends. Quit the game and your library comes back.
 - **Everything on the controller.** Search, an on-screen keyboard, volume, display settings, power controls, mouse mode and a live button test.
-- **Your history, kept.** A Journal of every game you played, with time, stars, status and notes. Achievements are read from the game itself, never typed in or guessed. Back it up to a private gist on your own GitHub account, free, and get it back on a new PC.
-- **Updates itself.** New versions download from GitHub Releases in the background and install at the next start. Press View in a game for a screenshot; View on Home opens the Media Gallery.
+- **Your history, kept.** A Journal of every game you played, with time, stars, status and notes. Achievements are read from the game itself, never typed in or guessed, and every game earns Padwake trophies for your time with it. Back it up to a private gist on your own GitHub account, free, and get it back on a new PC.
+- **Updates itself.** New versions download from GitHub Releases in the background and install at the next start. Press Guide + View in a game for a screenshot; View on Home opens the Media Gallery.
 - **Games and media.** Switch to YouTube, Netflix, Spotify, Twitch, Plex or Crunchyroll without leaving the launcher.
 
 ## Fast when you move. Quiet when you play.
@@ -56,9 +56,10 @@ On an AntCloud PC, turn on **Settings → Power → Cloud PC Mode**. Windows 10/
 | **LB / RB** | Switch tabs; previous / next screenshot |
 | **LT / RT** | Jump through game rows, grids and hub cards |
 | **Menu** | Options for the focused game; sorting in Library |
-| **View** | Screenshot during a game; Media Gallery on Home |
+| **View** | Media Gallery on Home; in a game, it stays the game's button |
 | **Guide — tap** | Open / close Control Center; over a game: Back to Game, Switch Game, Close Game |
 | **Guide — hold** | Go Home |
+| **Guide + View** | Screenshot during a game |
 
 <details>
 <summary><strong>Typing, mouse mode and keyboard shortcuts</strong></summary>

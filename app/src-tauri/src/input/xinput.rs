@@ -142,6 +142,17 @@ impl Guide {
             _ => None,
         }
     }
+
+    /// This press was part of a chord: when it ends it is neither a tap nor a hold.
+    fn swallow(&mut self, now: Instant) {
+        self.since = Some(now);
+        self.held = true;
+    }
+}
+
+/// Guide and View are both down now, and weren't both down last time: the screenshot chord, in either order.
+fn chord(pad: &Pad, last: &Pad) -> bool {
+    pad.guide && pad.view && !(last.guide && last.view)
 }
 
 fn run<R: Runtime>(app: AppHandle<R>, get: GetState) {
@@ -236,9 +247,10 @@ fn run<R: Runtime>(app: AppHandle<R>, get: GetState) {
             if pad.guide && !last.guide {
                 crate::games::guide_down(&app);
             }
-            // View while a game is in front: a screenshot (the page is asleep then and gets nothing)
-            if pad.view && !last.view {
-                crate::games::view_pressed(&app);
+            // Guide + View while a game is in front: a screenshot. View alone stays the game's (maps, scoreboards), and
+            // XInput can't hide a press from it. `shown`: the launch screen is up, or the page handles the buttons
+            if !shown && chord(&pad, &last) && crate::games::screenshot(&app) {
+                guide.swallow(now);
             }
             // sent while hidden too: over a running game the games area wakes the window first and sends it itself
             if let Some(kind) = guide.update(pad.guide, now) {
@@ -303,5 +315,42 @@ mod tests {
         assert_eq!(g.update(true, ms(1600)), Some("hold"));
         assert_eq!(g.update(true, ms(2500)), None);
         assert_eq!(g.update(false, ms(2600)), None);
+    }
+
+    #[test]
+    fn screenshot_needs_guide_and_view_together() {
+        let (none, view, guide, both) = (
+            Pad::default(),
+            Pad { view: true, ..Pad::default() },
+            Pad { guide: true, ..Pad::default() },
+            Pad { guide: true, view: true, ..Pad::default() },
+        );
+        assert!(!chord(&view, &none), "View alone belongs to the game");
+        assert!(!chord(&guide, &none), "Guide alone is a tap or a hold");
+        assert!(chord(&both, &guide), "Guide, then View");
+        assert!(chord(&both, &view), "View, then Guide");
+        assert!(chord(&both, &none), "both in one poll");
+        assert!(!chord(&both, &both), "one shot per press, however long it is held");
+    }
+
+    #[test]
+    fn a_chord_is_neither_a_tap_nor_a_hold() {
+        let t0 = Instant::now();
+        let ms = |n| t0 + Duration::from_millis(n);
+        let mut g = Guide::default();
+        assert_eq!(g.update(true, ms(0)), None);
+        g.swallow(ms(100));
+        assert_eq!(g.update(true, ms(100)), None);
+        assert_eq!(g.update(true, ms(900)), None, "no hold");
+        assert_eq!(g.update(false, ms(1000)), None, "no tap");
+
+        // both pressed in the same poll: swallowed before Guide's first update
+        g.swallow(ms(2000));
+        assert_eq!(g.update(true, ms(2000)), None);
+        assert_eq!(g.update(false, ms(2050)), None);
+
+        // and the next press is an ordinary tap
+        assert_eq!(g.update(true, ms(3000)), None);
+        assert_eq!(g.update(false, ms(3100)), Some("tap"));
     }
 }
