@@ -15,6 +15,7 @@
 //                                 display  a display-mode trial: {state: 'trial' | 'kept' | 'reverted', mode}
 //                                 update   the update status (host.cloud.update) after any change
 //                                 backup   the backup status (host.cloud.backup) after any change
+//                                 users    {users, current} after any change (host.users)
 //   host.fileUrl(path)          an absolute file path in the data dir (art, media) as a URL the page can load.
 // Without window.__TAURI__ (a plain browser, headless Edge) this is a mock host with fake data. The keyboard drives
 // input; window.__mock.emit(event, payload) sends host events from a test (pad state, a game exiting).
@@ -130,6 +131,25 @@ export const host = {
     backUpNow: () => call('cloud', 'backup_now'),
     restore: () => call('cloud', 'backup_restore'),       // merges the backup in: nothing here is lost
     dismissFound: () => call('cloud', 'backup_dismiss'),
+  },
+  // Local users (users area). Each has their own time played, journal, trophies, screenshots and GitHub backup; the
+  // games, art and settings are shared. {users: [{id, name, avatar (ui/users/avatars.js), avatarName, image (the
+  // picture of a char: or pic: avatar), createdAt}], current}. A new user's avatar 'random' becomes a popular
+  // character soon after (a `users` event).
+  // A switch sends `library` (the new user's time and journal) and `backup` (their status), then `users`.
+  users: {
+    list: () => call('users', 'list'),
+    add: (name, avatar) => call('users', 'add', { name, avatar }), // resolves with the user; no switch
+    edit: (id, patch) => call('users', 'edit', { id, ...patch }),   // patch {name?, avatar?}; resolves with the user
+    remove: id => call('users', 'remove', { id }),                  // not the current user; their things on this PC go
+    switch: id => call('users', 'switch', { id }),                  // refused while a game runs
+    // characters (AniList): [{id, name, from, image (a local picture)}]; avatar 'char:<id>' with avatarName = name
+    featured: () => call('users', 'featured'),                      // the popular ones, Berserk's among them
+    search: query => call('users', 'search', { query }),            // by name, most loved first
+    // your pictures from data\avatars\mine, Pictures, Downloads and Desktop, newest first: [{path, name, place,
+    // modified, thumb}]; usePicture makes one a user's avatar (resolves with the user)
+    pictures: () => call('users', 'pictures'),
+    usePicture: (id, path) => call('users', 'use_picture', { id, path }),
   },
 };
 
@@ -382,7 +402,7 @@ const MOCK = {
       setTimeout(() => emit('library', mockLibrary), 300);
       return g;
     },
-    journal: () => [...mockLibrary.filter(inJournal), ...mockKept],
+    journal: () => [...mockLibrary, ...mockKept].filter(inJournal),
     review: ({ id, journal }) => {
       const g = mockLibrary.find(x => x.id === id) ?? mockKept.find(x => x.id === id);
       if (!g) throw new Error(`no game ${id}`);
@@ -567,6 +587,122 @@ function mockRevert(reason) {
   emit('display', { state: 'reverted', reason, mode: t.from });
 }
 
+// ---- users: ?users=3 starts with three (Madhav has the journal above, Asha played two games, Kabir nothing yet),
+// else one. A switch puts the next user's time and journal on the stand-ins, as the real host does.
+const PLAY = ['playtimeSec', 'sessions', 'firstPlayed', 'lastPlayed', 'journal', 'restoredAt'];
+const blankPlay = () => ({ playtimeSec: 0, sessions: 0, firstPlayed: null, lastPlayed: null, journal: { rating: null, status: null, note: null }, restoredAt: null });
+const mockUsers = { users: [{ id: 'u1', name: 'Madhav', avatar: 'ember', createdAt: Date.now() - 90 * DAY }], current: 'u1' };
+const mockPlays = new Map(); // user id → {game id: play} for users other than the current one
+if (Number(query.get('users') ?? 1) >= 3) {
+  mockUsers.users.push({ id: 'u2', name: 'Asha', avatar: 'moon', createdAt: Date.now() - 40 * DAY },
+    { id: 'u3', name: 'Kabir', avatar: 'bolt', createdAt: Date.now() - 2 * DAY });
+  mockPlays.set('u2', {
+    'hollow-knight': { ...blankPlay(), playtimeSec: 41 * 3600, sessions: 30, lastPlayed: Date.now() - 3600e3, firstPlayed: Date.now() - 30 * DAY,
+      journal: { rating: 5, status: 'playing', note: 'Asha: the Mantis Lords!' } },
+    celeste: { ...blankPlay(), playtimeSec: 2 * 3600, sessions: 3, lastPlayed: Date.now() - 2 * DAY, firstPlayed: Date.now() - 9 * DAY },
+  });
+  mockPlays.set('u3', {});
+}
+function mockWear(id) {
+  const all = [...mockLibrary, ...mockKept];
+  mockPlays.set(mockUsers.current, Object.fromEntries(all.map(g => [g.id, Object.fromEntries(PLAY.map(k => [k, g[k] ?? null]))])));
+  const plays = mockPlays.get(id) ?? {};
+  for (const g of all) Object.assign(g, blankPlay(), structuredClone(plays[g.id] ?? {}));
+  mockPlays.delete(id);
+  mockUsers.current = id;
+}
+// characters and pictures: canvas portraits with a name on them (the mock can't reach AniList or the PC's folders)
+let mockChars = null, mockExtra = null, mockPics = null;
+const portrait = (name, hue) => picture(256, 256, hue, false, name.split(' ').map(w => w[0]).join(''));
+function mockCharacters() {
+  return mockChars ??= [['Cloud Strife', 'Final Fantasy VII', 210], ['Tifa Lockhart', 'Final Fantasy VII', 330], ['2B', 'NieR:Automata', 0],
+    ['Dante', 'Devil May Cry', 355], ['Master Chief', 'Halo', 110], ['Link', 'The Legend of Zelda', 140], ['Pikachu', 'Pokemon', 55],
+    ['Sonic the Hedgehog', 'Sonic X', 225], ['Guts', 'Berserk', 20], ['Griffith', 'Berserk', 260], ['Casca', 'Berserk', 300],
+    ['The Skull Knight', 'Berserk', 190]].map(([name, from, hue], i) => ({ id: 1000 + i, name, from, image: portrait(name, hue) }));
+}
+function mockSearchExtra() {
+  return mockExtra ??= [['Zodd', 'Berserk', 15], ['Puck', 'Berserk', 160], ['Serpico', 'Berserk', 90]]
+    .map(([name, from, hue], i) => ({ id: 2000 + i, name, from, image: portrait(name, hue) }));
+}
+function mockPictures() {
+  return mockPics ??= [['me at the beach', 'Downloads', 30], ['cat', 'Pictures', 80], ['Screenshot 2026-11-01', 'Screenshots', 200],
+    ['kratos', 'Padwake', 5]].map(([name, place, hue], k) => {
+    const thumb = picture(160, 160, hue, false, name[0].toUpperCase());
+    return { path: `C:\\Users\\player\\${place}\\${name}.jpg`, name, place, modified: Date.now() - k * 36e5, thumb };
+  });
+}
+const mockUserName = (name, except) => {
+  const n = String(name ?? '').trim().split(/\s+/).join(' ');
+  if (!n) throw new Error('Type a name.');
+  if ([...n].length > 16) throw new Error('A name can be up to 16 characters.');
+  if (mockUsers.users.some(u => u.id !== except && u.name.toLowerCase() === n.toLowerCase())) throw new Error(`There's already a user called ${n}.`);
+  return n;
+};
+MOCK.users = {
+  list: () => mockUsers,
+  add: ({ name, avatar }) => {
+    const u = { id: `u${Date.now().toString(36)}`, name: mockUserName(name), avatar, createdAt: Date.now() };
+    mockUsers.users.push(u);
+    mockPlays.set(u.id, {});
+    emit('users', mockUsers);
+    // as the host: a random popular character nobody has, once "AniList" answers
+    if (avatar === 'random') setTimeout(() => {
+      const free = mockCharacters().filter(c => !mockUsers.users.some(x => x.avatar === `char:${c.id}`));
+      const c = free[0] ?? mockCharacters()[0];
+      Object.assign(u, { avatar: `char:${c.id}`, avatarName: c.name, image: c.image });
+      emit('users', mockUsers);
+    }, 300);
+    return u;
+  },
+  featured: async () => { await sleep(150); return mockCharacters(); },
+  search: async ({ query }) => {
+    await sleep(250);
+    const q = String(query ?? '').trim().toLowerCase();
+    if (q.length < 2) throw new Error('Type at least two letters.');
+    return mockCharacters().concat(mockSearchExtra()).filter(c => c.name.toLowerCase().includes(q) || c.from?.toLowerCase().includes(q));
+  },
+  pictures: async () => { await sleep(150); return query.get('pictures') === '0' ? [] : mockPictures(); },
+  use_picture: ({ id, path }) => {
+    const pic = mockPictures().find(x => x.path === path);
+    if (!pic) throw new Error('Pick a picture from the list.');
+    const u = mockUsers.users.find(x => x.id === id);
+    Object.assign(u, { avatar: `pic:${pic.name}`, avatarName: pic.name, image: pic.thumb });
+    emit('users', mockUsers);
+    return u;
+  },
+  edit: ({ id, name, avatar, avatarName }) => {
+    const u = mockUsers.users.find(x => x.id === id);
+    if (!u) throw new Error("That user isn't on this PC any more.");
+    if (name != null) u.name = mockUserName(name, id);
+    if (avatar != null) {
+      u.avatar = avatar;
+      const c = mockCharacters().concat(mockSearchExtra()).find(x => `char:${x.id}` === avatar);
+      u.avatarName = /^(char|pic):/.test(avatar) ? avatarName ?? c?.name ?? null : null;
+      u.image = c?.image ?? (avatar.startsWith('pic:') ? u.image : null);
+    }
+    emit('users', mockUsers);
+    return u;
+  },
+  remove: ({ id }) => {
+    if (id === mockUsers.current) throw new Error('Switch to another user first.');
+    mockUsers.users = mockUsers.users.filter(u => u.id !== id);
+    mockPlays.delete(id);
+    emit('users', mockUsers);
+    return mockUsers;
+  },
+  switch: async ({ id }) => {
+    if (mockRunning) throw new Error('Close the game first. Its time goes to whoever started it.');
+    if (!mockUsers.users.some(u => u.id === id)) throw new Error("That user isn't on this PC any more.");
+    if (id !== mockUsers.current) {
+      mockWear(id);
+      emit('library', mockLibrary);
+      emit('backup', mockCloud.backup);
+    }
+    emit('users', mockUsers);
+    return mockUsers;
+  },
+};
+
 async function mock(area, command, args) {
   const fn = MOCK[area]?.[command];
   if (!fn) throw new Error(`mock host has no ${area}|${command}`);
@@ -576,4 +712,5 @@ async function mock(area, command, args) {
 if (isMock) window.__mock = { emit, library: mockLibrary, kept: mockKept, settings: mockSettings, rumbles: mockRumbles };
 if (isMock) window.__mock.system = mockSystem; // Settings tests read the power log and the display trial
 if (isMock) window.__mock.cloud = mockCloud; // update and backup tests
+if (isMock) window.__mock.users = mockUsers; // users tests
 if (isMock) window.__mock.guideOverGame = mockGuideOverGame; // Control Center tests: Guide over a running game

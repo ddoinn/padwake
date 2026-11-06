@@ -1,9 +1,9 @@
 [
   {"eval": "__app.go('settings')"},
   {"wait": 1200},
-  {"assert": "__settings.stack[0].list.rows.map(r => r.label).join() === 'Display,Sound,Controllers,Network,Library,Saved Data,Power,System'", "why": "Saved Data sits between Library and Power"},
+  {"assert": "__settings.stack[0].list.rows.map(r => r.label).join() === 'Display,Sound,Controllers,Network,Users,Library,Saved Data,Power,System'", "why": "Saved Data sits between Library and Power"},
 
-  {"eval": "__settings.stack[0].list.focus(7)"},
+  {"eval": "__settings.stack[0].list.focus(8)"},
   {"key": "Enter"}, {"wait": 900},
   {"assert": "__settings.stack.at(-1).def.title === 'System' && __settings.stack.at(-1).def.cats[0].label === 'System Software'", "why": "System opens on System Software"},
   {"key": "ArrowRight"}, {"wait": 300},
@@ -22,7 +22,7 @@
   {"assert": "__mock.cloud.installed === true", "why": "Update and Restart installs"},
 
   {"key": "Escape"}, {"wait": 300}, {"key": "Escape"}, {"wait": 700},
-  {"eval": "__settings.stack[0].list.focus(5)"},
+  {"eval": "__settings.stack[0].list.focus(6)"},
   {"key": "Enter"}, {"wait": 900},
   {"assert": "__settings.stack.at(-1).def.title === 'Saved Data'", "why": "Saved Data opens"},
   {"key": "ArrowRight"}, {"wait": 300},

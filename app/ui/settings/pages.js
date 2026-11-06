@@ -8,6 +8,7 @@ import { network } from './network/network.js';
 import { padTest } from './controller-test.js';
 export { padTest } from './controller-test.js';
 import { savedData, softwareCategory } from './cloud.js';
+import { usersPage } from './users.js';
 import { isCloudPc, END_LABEL, END_TITLE, END_STEPS } from '../cloud-pc.js';
 
 export const root = () => ({
@@ -18,6 +19,7 @@ export const root = () => ({
     { kind: 'link', label: 'Sound', icon: ICONS.sound, open: sound },
     { kind: 'link', label: 'Controllers', icon: ICONS.controllers, open: controllers },
     { kind: 'link', label: 'Network', icon: ICONS.network, open: network },
+    { kind: 'link', label: 'Users', icon: ICONS.users, open: usersPage },
     { kind: 'link', label: 'Library', icon: ICONS.library, open: library },
     { kind: 'link', label: 'Saved Data', icon: ICONS.savedData, open: savedData },
     { kind: 'link', label: 'Power', icon: ICONS.power, open: power },

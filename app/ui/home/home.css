@@ -86,12 +86,16 @@
 #screen-home .top .tab:nth-child(2) { left: 290px; }
 #screen-home .top .tab.sel { font-weight: 600; color: var(--text); }
 #screen-home .top .clock { position: absolute; top: 45px; right: 87px; font-size: 36px; line-height: 36px; font-weight: 300; }
-/* icons on 64 px discs centred on the measured glyphs: search (1411, 62.5), gear (1515.5, 62.5), power in the
-   avatar's place (1622, 64.5) */
+/* icons on 64 px discs on the measured 105 px pitch, ending with the user's avatar in the PS5's avatar place (1622, 64.5) */
 #screen-home .top .icon { position: absolute; top: 31px; width: 64px; height: 64px; color: #fff; }
-#screen-home .top .icon.search { left: 1379px; }
-#screen-home .top .icon.settings { left: 1484px; }
-#screen-home .top .icon.power { left: 1590px; top: 33px; }
+#screen-home .top .icon.search { left: 1274px; }
+#screen-home .top .icon.settings { left: 1379px; }
+#screen-home .top .icon.power { left: 1484px; top: 33px; }
+#screen-home .top .icon.user { left: 1590px; top: 33px; }
+/* the avatar: 56 px, focused with a white ring 3 px clear of it (not the icons' white disc) */
+#screen-home .top .icon.user > i { display: none; }
+#screen-home .top .icon.user .av { position: absolute; left: 4px; top: 4px; width: 56px; height: 56px; border-radius: 50%; outline: 3px solid transparent; outline-offset: 3px; transition: outline-color 100ms; }
+#screen-home .top .icon.user.focus .av { outline-color: #fff; }
 #screen-home .top .icon svg { position: absolute; left: 17px; top: 17px; width: 30px; height: 30px; }
 #screen-home .top .icon.settings svg { left: 16px; top: 16px; width: 32px; height: 32px; }
 #screen-home .top .icon.power svg { left: 15px; top: 15px; width: 34px; height: 34px; }
@@ -103,7 +107,7 @@
   position: absolute; left: 50%; top: 64px; transform: translateX(-50%); font-size: 24px; line-height: 32px; white-space: nowrap;
   color: #fff; opacity: 0; transition: opacity 100ms;
 }
-#screen-home .top .icon.power .tip { top: 62px; }
+#screen-home .top .icon.power .tip, #screen-home .top .icon.user .tip { top: 62px; }
 #screen-home .top .icon.focus .tip { opacity: 1; }
 
 /* ---------- tile row: 168 px squares at the focused size, scaled to 106 px when small (home.js places them) ---------- */

@@ -2,13 +2,14 @@
 //! player's own account, so a new or reset PC gets them back.
 //! - Sign-in is GitHub's device flow, made for TVs: the page shows a code, the player types it at github.com/login/device
 //!   on a phone. It needs the client ID of a GitHub OAuth app with Device Flow on (`CLIENT_ID`; no secret is involved).
-//!   The token (scope `gist` only) is kept with DPAPI in `data\github.token`: only this Windows user on this PC can
-//!   read it.
+//!   The token (scope `gist` only) is kept with DPAPI in `github.token`: only this Windows user on this PC can read it.
 //! - After sign-in the app looks for the gist ("Padwake backup"). If it holds games, the page offers a restore.
 //! - Each library change (a session ends, a review) marks the backup due; 2 min after the last change, when no game
 //!   runs, the gist is updated (setting `backupAuto`, on by default). Unchanged content isn't sent again. What is sent
 //!   keeps the other PC's games and time (`portable::combine`), so declining a restore loses nothing.
-//! - State: `data\backup.json` (login, gist id, last save and its content hash). Events: `backup` with the status.
+//! - State: `backup.json` (login, gist id, last save and its content hash). Events: `backup` with the status.
+//! - Each user (`users/mod.rs`) backs up to their own GitHub account: `backup.json` and `github.token` are in the
+//!   user's folder, and the status is the current user's. A switch waits for an upload under way and stops a sign-in.
 
 use super::github::{self, Http, Poll};
 use crate::library::portable::{self, Backup, Entry, Restored};
@@ -99,21 +100,40 @@ static SIGN_IN: AtomicU64 = AtomicU64::new(0);
 /// One upload or restore at a time.
 static BUSY: Mutex<()> = Mutex::new(());
 
+fn fresh() -> Live {
+    let saved = std::fs::read(saved_path()).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
+    Live { saved, state: State::Idle, code: None, error: None, found: None, restored: None }
+}
+
 fn live() -> MutexGuard<'static, Live> {
-    LIVE.get_or_init(|| {
-        let saved = std::fs::read(saved_path()).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
-        Mutex::new(Live { saved, state: State::Idle, code: None, error: None, found: None, restored: None })
-    })
-    .lock()
-    .unwrap_or_else(|e| e.into_inner())
+    LIVE.get_or_init(|| Mutex::new(fresh())).lock().unwrap_or_else(|e| e.into_inner())
 }
 
 fn saved_path() -> PathBuf {
-    crate::data::dir().join("backup.json")
+    crate::users::dir().join("backup.json")
 }
 
 fn token_path() -> PathBuf {
-    crate::data::dir().join("github.token")
+    token_in(&crate::users::dir())
+}
+
+fn token_in(user_dir: &std::path::Path) -> PathBuf {
+    user_dir.join("github.token")
+}
+
+/// Runs `f` (the switch to another user) with no upload or restore under way, and stops a sign-in that is waiting.
+pub fn while_switching<T>(f: impl FnOnce() -> T) -> T {
+    SIGN_IN.fetch_add(1, Ordering::SeqCst);
+    let _one = BUSY.lock().unwrap_or_else(|e| e.into_inner());
+    f()
+}
+
+/// Another user is playing: the status is theirs now. Their backup catches up on anything not sent yet.
+pub fn user_switched<R: Runtime>(app: &AppHandle<R>) {
+    let s = update(app, |l| *l = fresh());
+    if s.signed_in {
+        library_changed();
+    }
 }
 
 fn now_ms() -> u64 {
@@ -139,9 +159,13 @@ fn token() -> Option<String> {
 }
 
 fn persist(saved: &Saved) {
+    persist_in(&saved_path(), saved);
+}
+
+fn persist_in(path: &std::path::Path, saved: &Saved) {
     match serde_json::to_vec_pretty(saved) {
         Ok(b) => {
-            if let Err(e) = crate::library::write_file(&saved_path(), &b) {
+            if let Err(e) = crate::library::write_file(path, &b) {
                 log(&format!("backup: {e}"));
             }
         }
@@ -310,6 +334,8 @@ pub fn sign_in<R: Runtime>(app: &AppHandle<R>) -> Result<Status, String> {
     let http = Http::new();
     let dc = http.device_code(&client)?;
     let run = SIGN_IN.fetch_add(1, Ordering::SeqCst) + 1;
+    // the user signing in, even if another is playing by the time GitHub answers
+    let user_dir = crate::users::dir();
     let s = update(app, |l| {
         l.state = State::SigningIn;
         l.error = None;
@@ -341,20 +367,27 @@ pub fn sign_in<R: Runtime>(app: &AppHandle<R>) -> Result<Status, String> {
         if SIGN_IN.load(Ordering::SeqCst) != run {
             return;
         }
-        match token.and_then(|t| signed_in(&http, &t)) {
+        match token.and_then(|t| signed_in(&http, &t, &user_dir)) {
             Ok((login, gist_id, found)) => {
                 log(&format!("backup: signed in as {login}"));
+                let saved = Saved { login: Some(login), gist_id, ..Saved::default() };
+                persist_in(&user_dir.join("backup.json"), &saved);
+                if SIGN_IN.load(Ordering::SeqCst) != run {
+                    return; // another user is playing now: this one's sign-in is kept for them
+                }
                 update(&app, |l| {
-                    l.saved = Saved { login: Some(login), gist_id, ..Saved::default() };
+                    l.saved = saved;
                     l.state = State::Idle;
                     l.code = None;
                     l.found = found;
-                    persist(&l.saved);
                 });
                 library_changed(); // the first backup (it keeps what the gist already has)
             }
             Err(e) => {
-                let _ = std::fs::remove_file(token_path());
+                let _ = std::fs::remove_file(token_in(&user_dir));
+                if SIGN_IN.load(Ordering::SeqCst) != run {
+                    return;
+                }
                 update(&app, |l| {
                     l.state = State::Error;
                     l.code = None;
@@ -367,10 +400,10 @@ pub fn sign_in<R: Runtime>(app: &AppHandle<R>) -> Result<Status, String> {
 }
 
 /// After the token: keeps it, and finds the account and its backup.
-fn signed_in(http: &Http, token: &str) -> Result<(String, Option<String>, Option<Found>), String> {
+fn signed_in(http: &Http, token: &str, user_dir: &std::path::Path) -> Result<(String, Option<String>, Option<Found>), String> {
     let login = http.login(token)?;
     let sealed = super::crypto::protect(token.as_bytes())?;
-    crate::library::write_file(&token_path(), &sealed)?;
+    crate::library::write_file(&token_in(user_dir), &sealed)?;
     let gist_id = http.find_gist(token)?;
     let found = match &gist_id {
         Some(id) => http.read_gist(token, id)?.and_then(|t| parse(&t).ok()).and_then(|b| {

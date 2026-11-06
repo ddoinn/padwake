@@ -10,6 +10,7 @@ mod media;
 mod settings;
 mod startup;
 mod system;
+mod users;
 
 pub use library::cli;
 pub use startup::watchdog_cli;
@@ -36,6 +37,7 @@ pub fn run() {
         .plugin(startup::plugin())
         .plugin(media::plugin())
         .plugin(cloud::plugin())
+        .plugin(users::plugin())
         .setup(|app| {
             // art and media are files in the data dir; the UI loads them through the asset protocol
             app.asset_protocol_scope().allow_directory(data::dir(), true)?;

@@ -11,7 +11,7 @@ import { host } from './host.js';
 import { startInput } from './input/input.js';
 
 const FIRST = 'start'; // the light show and "Press any button", which reveals Home (?scene= skips it)
-const SCREENS = ['start', 'home', 'library', 'search', 'control-center', 'settings', 'media', 'journal', 'gallery'];
+const SCREENS = ['start', 'home', 'library', 'search', 'control-center', 'settings', 'media', 'journal', 'gallery', 'users'];
 const stage = document.getElementById('stage');
 const loaded = new Map();
 

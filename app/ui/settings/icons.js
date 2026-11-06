@@ -10,6 +10,7 @@ export const ICONS = {
   library: svg('<rect x="4" y="4" width="12" height="12" rx="2"/><rect x="20" y="4" width="12" height="12" rx="2"/>' +
     '<rect x="4" y="20" width="12" height="12" rx="2"/><rect x="20" y="20" width="12" height="12" rx="2"/>'),
   savedData: svg('<path d="M10.5 28h15.5a7 7 0 0 0 1.2-13.9A9.5 9.5 0 0 0 9 13.4 7.3 7.3 0 0 0 10.5 28z"/><path d="M18 24v-8.5M14.2 19.3 18 15.5l3.8 3.8"/>'),
+  users: svg('<circle cx="14" cy="12" r="5.5"/><path d="M4 30c0-6 4.5-10 10-10s10 4 10 10"/><circle cx="25.5" cy="11" r="4.2"/><path d="M26 19.5c4 .5 6.5 4 6.5 9"/>'),
   power: svg('<path d="M18 4v13"/><path d="M10.2 9.2a12 12 0 1 0 15.6 0"/>'),
   system: svg('<path d="M5 9h26M5 18h26M5 27h26"/><circle cx="12" cy="9" r="3.2" fill="#2a262c"/><circle cx="24" cy="18" r="3.2" fill="#2a262c"/><circle cx="15" cy="27" r="3.2" fill="#2a262c"/>'),
 };

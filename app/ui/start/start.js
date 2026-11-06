@@ -21,13 +21,16 @@
 //   (+1300 ms). Home's own elements carry Web Animations that end with the reveal, so Home is left exactly as it
 //   draws itself, and this screen sits behind Home meanwhile, so the row comes in over the spotlight.
 // - Then this screen leaves the stack: the bokeh, the spotlight and the video are dropped, and nothing of it runs.
+// - With two or more users, the press opens Who's using this controller? (ui/users) over this screen's light; the
+//   reveal starts once a user is picked, with Home already showing their games.
 // A restart mid-sitting (host.startup.info().restarted: Update and Restart, a crash on a PC on for a while) goes
-// straight to Home. Each dismissal goes in the log (host.startup.note), which says why a start screen wasn't seen.
+// straight to Home, as the user who was playing. Each dismissal goes in the log (host.startup.note), which says why a start screen wasn't seen.
 
 import { sparkle } from './sparkle.js';
 import { mount as spotlight } from '../background/spotlight.js';
 import { settings } from '../input/input.js';
 import { isCloudPc } from '../cloud-pc.js';
+import * as users from '../users/store.js';
 
 const FRAME = 1000 / 60;
 const PROMPT_AT = 3300;                   // ms into the light show: the beam is lit
@@ -50,7 +53,7 @@ const HANDOFF_MS = 1300; // from the prompt (3.3 s) to the video's end (4.6 s)
 const GLYPH = '<svg viewBox="0 0 64 64"><path fill="#16181f" d="M20 20h24c7.7 0 13 6.4 13.8 15.2l.9 9.6c.4 4.5-2.9 7.2-6.3 7.2-2.5 0-4.4-1.4-5.8-3.4L42.8 43H21.2l-3.8 5.6c-1.4 2-3.3 3.4-5.8 3.4-3.4 0-6.7-2.7-6.3-7.2l.9-9.6C7 26.4 12.3 20 20 20z"/><rect x="16.5" y="28" width="4" height="12" rx="1" fill="#fff"/><rect x="12.5" y="32" width="12" height="4" rx="1" fill="#fff"/><circle cx="44" cy="30" r="2.6" fill="#fff"/><circle cx="49.5" cy="35.5" r="2.6" fill="#fff"/><circle cx="38.5" cy="35.5" r="2.6" fill="#fff"/><circle cx="44" cy="41" r="2.6" fill="#fff"/></svg>';
 
 let app, host, root, video, prompt, glow, spark, spot;
-let phase = 'new';                        // new | boot | intro | prompt | reveal | done
+let phase = 'new';                        // new | boot | intro | prompt | pick | reveal | done
 let promptAt = 0, revealAt = 0, videoUrl = null, noVideo = false;
 let timers = [], anims = [];
 
@@ -99,6 +102,7 @@ export default {
     }
     if (press && phase === 'prompt' && performance.now() - promptAt >= PRESS_GUARD) {
       note(`dismissed with ${name} (${e.source}), ${((performance.now() - promptAt) / 1000).toFixed(1)} s after the prompt showed`);
+      if (users.users().length > 1) return pick();
       reveal();
       return 'start';
     }
@@ -112,7 +116,7 @@ const note = text => { host.startup.note(text).catch(() => {}); };
 async function boot(params) {
   phase = 'boot';
   const info = await host.startup.info().catch(() => ({}));
-  await app.go('home', params);
+  await Promise.all([app.go('home', params), users.ready]);
   if (info?.restarted) { stop(); return; }
   root.parentNode.append(root); // above Home, under any screen loaded later (Control Center)
   await app.push('start');
@@ -183,6 +187,17 @@ function unloadVideo() {
   video.load(); // lets the decoder go
   if (videoUrl) URL.revokeObjectURL(videoUrl);
   videoUrl = null;
+}
+
+// Who's using this controller? over the light; the reveal follows the pick
+function pick() {
+  phase = 'pick';
+  clearTimers();
+  cancelAll();
+  prompt.style.opacity = 0;
+  anims.push(prompt.animate([{ opacity: 1 }, { opacity: 0 }], { duration: PROMPT_OUT, easing: EASE_OUT }));
+  app.push('users', { over: 'start', onPick: () => { note('picked a user'); reveal(); } });
+  return 'start';
 }
 
 function reveal() {

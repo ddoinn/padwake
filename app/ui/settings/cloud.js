@@ -163,7 +163,7 @@ export function savedData(ctx) {
             return [
               {
                 kind: 'action', key: 'sign-in', label: 'Sign In with GitHub',
-                desc: 'Keep your time played, ratings, status and notes in a private gist on your own GitHub account. It is free, and a new PC gets them back.',
+                desc: 'Keep your time played, ratings, status and notes in a private gist on your own GitHub account. It is free, and a new PC gets them back. Each user signs in to their own.',
                 run: () => (busy() ? null : signIn()),
               },
             ];

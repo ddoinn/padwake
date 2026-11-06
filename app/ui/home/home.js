@@ -19,11 +19,15 @@
 //   rows, 116 px below their Library spots, fading in once the slide has ended and the covers are decoded. Home →
 //   Library starts from there, so its covers are already decoded when the Library first draws them.
 // - View opens the Media Gallery (ui/gallery) over Home: the screenshots View took while a game ran.
+// - The top bar ends with the user's avatar (ui/users): A opens Switch User and Users. A switch sends the next user's
+//   `library`, so the row, hero and box art show their time and order.
 
 import { runDistance, runSpeed } from '../input/input.js';
 import { warmControlCenter } from '../control-center/notices.js'; // Control Center's notifications and toasts, kept from boot
 import { toast } from '../control-center/toast.js';
 import { sorted, SORTS } from '../library/library.js'; // the preview shows the Library's first rows in its order
+import { avatarHtml } from '../users/avatars.js';
+import * as users from '../users/store.js';
 
 const BIG = 168, SMALL = 106, SCALE = SMALL / BIG;
 const FOCUS_X = 172, PREV_X = 50, NEXT_X = 356, PITCH = 114;
@@ -69,7 +73,8 @@ const ICONS = {
   play: '<svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="18" fill="#fff"/><path d="M14.5 11.5v13l10-6.5Z" fill="#111"/></svg>',
   pause: '<svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="18" fill="#fff"/><path d="M13 11h3.6v14H13Zm6.4 0H23v14h-3.6Z" fill="#111"/></svg>',
 };
-const TOPS = [['search', 'Search'], ['settings', 'Settings'], ['power', 'Power']];
+ICONS.user = '<b class="av"></b>'; // the user's avatar, drawn by drawUser()
+const TOPS = [['search', 'Search'], ['settings', 'Settings'], ['power', 'Power'], ['user', '']];
 
 let app, host, root;
 const $ = {};                 // named elements
@@ -141,6 +146,8 @@ export default {
     $.icons = TOPS.map(([id]) => el.querySelector(`.top .icon.${id}`));
     $.tabs = [...el.querySelectorAll('.top .tab')];
     clock(el.querySelector('.clock'));
+    users.onUsers(drawUser);
+    users.ready.then(drawUser);
 
     host.on('library', list => setGames(list));
     host.on('game', gameEvent);
@@ -534,8 +541,30 @@ function topAction(name, e) {
 function topActivate(id) {
   if (id === 'search') app.push('search');
   else if (id === 'settings') app.push('settings');
+  else if (id === 'user') return userMenu();
   else app.push('control-center', { power: true });
   return true;
+}
+
+// the avatar at the end of the top bar, its tooltip the user's name. After a switch (whose `library` came first) the
+// row starts at the new user's last played game.
+let shownUser = null;
+function drawUser() {
+  const me = users.me();
+  const icon = $.icons?.[TOPS.findIndex(([id]) => id === 'user')];
+  if (!icon || !me) return;
+  if (shownUser && shownUser !== me.id && tab === 'games') setItems(items[0]?.id);
+  shownUser = me.id;
+  icon.querySelector('.av').innerHTML = avatarHtml(me, 56, { games: users.libraryGames(), host });
+  icon.querySelector('.tip').textContent = me.name;
+}
+
+function userMenu() {
+  menuItems = [
+    ['Switch User', () => { closeMenu(); app.push('users'); }],
+    ['Users', () => { closeMenu(); app.push('settings', { open: 'users' }); }],
+  ];
+  return showMenu('top', users.me()?.name);
 }
 
 function switchTab(t) {
@@ -1384,8 +1413,8 @@ function showMenu(from, head = null) {
   if (head) items.unshift(Object.assign(document.createElement('div'), { className: 'head', textContent: head }));
   $.menu.replaceChildren(...items);
   // next to what it is for: under the focused tile's label, or beside •••
-  $.menu.style.left = from === 'row' ? '172px' : '611px';
-  $.menu.style.top = from === 'row' ? '318px' : from === 'hub1' ? `${836 - HUB_LIFT}px` : '318px';
+  $.menu.style.left = from === 'row' ? '172px' : from === 'top' ? '1194px' : '611px';
+  $.menu.style.top = from === 'row' ? '318px' : from === 'hub1' ? `${836 - HUB_LIFT}px` : from === 'top' ? '140px' : '318px';
   zone = 'menu';
   menuSelect(0);
   setStyle($.menu, 'opacity', 1, 6 * FRAME, EASE_OUT, 0);

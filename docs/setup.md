@@ -72,7 +72,7 @@ the Windows desktop. To come back, start `padwake.exe` again, or sign out and in
 Press **Guide + View** (View is the button with two squares) while you play to save a screenshot of the game; a toast
 confirms it. **View** on its own stays the game's button, for maps and scoreboards.
 On Home, **View** opens the **Media Gallery** with every screenshot, newest first: **A** shows one full screen, **X**
-deletes it. They are JPEG files in `data\captures`, one folder per game. Games that run in exclusive full screen or play
+deletes it. They are JPEG files in `data\users\<user>\captures`, one folder per game, and each user sees their own. Games that run in exclusive full screen or play
 protected video copy as black; Padwake says so instead of saving a black picture.
 
 ## 9. Updates
@@ -91,7 +91,7 @@ Padwake updates itself from its GitHub releases. It is free and needs no account
 ## 10. Back up your time and journal to GitHub
 
 **Settings → Saved Data** keeps your time played, sessions, ratings, status and notes in a private gist on
-your own GitHub account. It is free. A new or reset PC gets them back.
+your own GitHub account. It is free. A new or reset PC gets them back. Each user on the PC signs in to their own account.
 
 1. Select **Sign In with GitHub**. A code shows on the TV.
 2. On your phone or computer, go to `github.com/login/device`, enter the code and allow Padwake. It only asks for
@@ -103,8 +103,8 @@ Automatically**). **Back Up Now** does it at once. A restore never loses anythin
 the notes you wrote on this PC stay. Games in the backup that aren't on this PC join the Journal marked "From backup",
 and get their time back when you put the game in your games folder under the same folder name.
 
-Art, trailers and your games folder aren't backed up: the PC fetches those again. The sign-in is kept in `data\`,
-readable only by your Windows account. **Sign Out** removes it; the backup stays on GitHub.
+Art, trailers and your games folder aren't backed up: the PC fetches those again. The sign-in is kept in your user's
+folder in `data\users\`, readable only by your Windows account. **Sign Out** removes it; the backup stays on GitHub.
 
 ## 11. Progress in the Journal
 
@@ -122,7 +122,26 @@ your first play and 10 sessions, silver for 10 hours and 50 sessions, gold for 5
 you come back to Home. They need no account or network, nothing you set can earn one, and a restored backup brings them
 back. They are separate from a game's own achievements.
 
-## 13. Cloud PCs (AntCloud)
+## 13. Users
+
+Everyone who plays on the PC can have their own user, with a name and an avatar. Each user has their own time played,
+Journal, trophies, screenshots and GitHub backup. The games, their art and every setting are shared.
+
+- **Add a user:** **Settings → Users → Add User**, or **Add User** on "Who's using this controller?".
+- **Choose who plays:** with two or more users, "Who's using this controller?" comes after "Press any button". To
+  switch later, go to Home, move up to your avatar at the right of the top bar and pick **Switch User**.
+- **Change a name or avatar:** **Settings → Users**, then the user, then **Avatar**. Pick a popular character (Berserk
+  included), **Search Characters** for any other (from AniList, online), one of your own pictures, one of Padwake's,
+  or a game's art. A new user starts with a random popular character.
+- **Use your own picture:** save a JPEG or PNG in **Pictures**, **Downloads** or **Desktop** on the PC (a browser
+  download lands in Downloads), or copy it into `data\avatars\mine`. It shows under **Your Pictures**, newest first.
+- **Delete a user:** switch to someone else first, then **Settings → Users → the user → Delete User**. Their time,
+  Journal and screenshots on this PC go; a GitHub backup stays on their account.
+
+You can't switch while a game runs, so a session's time always goes to whoever started it. After an update from a
+version without users, everything recorded so far belongs to the first user, "Player 1"; rename them in Settings → Users.
+
+## 14. Cloud PCs (AntCloud)
 
 An AntCloud PC doesn't turn off from Windows. Turn on **Settings → Power → Cloud PC Mode**: Shut Down becomes
 **End Session**, which shows what to press on the device you stream from (Ctrl + F9 in the AntCloud app, F9 in a

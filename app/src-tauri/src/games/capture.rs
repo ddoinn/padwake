@@ -1,5 +1,5 @@
 //! Captures: Guide + View while a game is in front saves the screen as a JPEG in
-//! `data\captures\<game id>\`, with a 480 px thumbnail beside it, and toasts "Screenshot saved." over the game. The
+//! `captures\<game id>\` in the current user's folder (`users/mod.rs`), with a 480 px thumbnail beside it, and toasts "Screenshot saved." over the game. The
 //! Media Gallery (`ui/gallery`) lists them.
 //! - The copy is the BitBlt Control Center's still uses (`backdrop.rs`), with our toast windows left out. Exclusive
 //!   full-screen and protected (DRM) output copy as black: an all-black frame isn't saved, the toast says so.
@@ -29,7 +29,7 @@ pub struct Capture {
 }
 
 pub fn dir() -> PathBuf {
-    let d = crate::data::dir().join("captures");
+    let d = crate::users::dir().join("captures");
     std::path::absolute(&d).unwrap_or(d)
 }
 

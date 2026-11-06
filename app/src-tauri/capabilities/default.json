@@ -12,6 +12,7 @@
     "settings:default",
     "startup:default",
     "media:default",
-    "cloud:default"
+    "cloud:default",
+    "users:default"
   ]
 }

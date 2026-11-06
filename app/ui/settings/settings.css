@@ -177,3 +177,27 @@
 #screen-settings .holding-back .pad-back-key circle { stroke-dashoffset: 0; transition: stroke-dashoffset 1s linear; }
 #screen-settings .pad-escape { color: var(--val); font-size: 20px; }
 #screen-settings .pad-escape span { margin-left: 14px; font-size: 24px; color: #fff; }
+
+/* Settings → Users → Avatar (users.js): a 7-wide grid of 150 px avatars, ours first, then the library's games */
+#screen-settings .avgrid { position: absolute; inset: 0; overflow: hidden; clip-path: inset(150px 0 0 0); }
+#screen-settings .avscroll { position: absolute; inset: 0; transition: transform 200ms var(--ease-out); }
+#screen-settings .avhead { position: absolute; left: 290px; font-size: 26px; line-height: 36px; color: var(--dim); }
+#screen-settings .avnote { position: absolute; left: 290px; right: 290px; font-size: 21px; line-height: 28px; color: #8f8c96; }
+#screen-settings .avtool { border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, .1); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .25); }
+/* Users (users.js): rows with a 44 px avatar before the name, as the PS5's Users list */
+#screen-settings .spage.users .srow .icon { left: 22px; top: calc(var(--capc) - 22px); width: 44px; height: 44px; }
+#screen-settings .spage.users .srow .icon svg { width: 36px; height: 36px; margin: 4px; }
+#screen-settings .spage.users .srow:has(> .icon) .label, #screen-settings .spage.users .srow:has(> .icon) .desc { left: calc(var(--tx) + 62px); }
+#screen-settings .avitem { position: absolute; width: 150px; display: flex; flex-direction: column; align-items: center; }
+#screen-settings .avitem .avatar { transform: scale(.9); transition: transform 150ms var(--ease-out); }
+#screen-settings .avitem::before {
+  content: ''; position: absolute; left: -9px; top: -9px; width: 168px; height: 168px; border-radius: 50%; border: 3px solid #fff;
+  opacity: 0; transition: opacity 120ms var(--ease-out);
+}
+#screen-settings .avitem.focus::before { opacity: 1; }
+#screen-settings .avitem.focus .avatar { transform: none; }
+#screen-settings .avitem > span {
+  margin-top: 16px; max-width: 190px; font-size: 22px; line-height: 30px; color: var(--dim); white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; opacity: 0; transition: opacity 120ms;
+}
+#screen-settings .avitem.focus > span { opacity: 1; color: #fff; }

@@ -9,11 +9,14 @@
 //!   HowLongToBeat; after each session and once per start, for games in the journal. Nobody types these in.
 //! - The list is saved in `library.json` in the data dir, with art and media in `library\<id>\`, and every change is
 //!   sent to the page as the `library` event (the full list). Log: `library.log`.
+//! - Time, sessions and the journal are each user's own (`users/mod.rs`): `users\<id>\play.json`, keyed by game id.
+//!   In memory and in the `library` event they are the current user's; `library.json` holds none. A removed game stays
+//!   in `kept` while any user has it in their journal, and only shows in the journal of those who do.
 //! - `library.json` keeps art and media paths relative to the data dir, so a copied or moved data dir keeps its art;
 //!   in memory, `list` and events they are absolute.
 //! - `padwake.exe --sync-once [--root <dir>]` runs one pass without a window; `--watch` keeps watching.
 
-mod art;
+pub(crate) mod art; // also the users area's character pictures
 mod hltb;
 pub mod portable;
 mod progress;
@@ -130,6 +133,60 @@ impl Game {
     }
 }
 
+/// What one user did with a game: the fields of `Game` that are theirs. `users\<id>\play.json` maps game ids to these.
+#[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+struct Play {
+    playtime_sec: u64,
+    sessions: u32,
+    first_played: Option<u64>,
+    last_played: Option<u64>,
+    journal: Journal,
+    /// a removed game that came back from this user's backup
+    #[serde(skip_serializing_if = "Option::is_none")]
+    restored_at: Option<u64>,
+}
+
+impl Play {
+    fn of(g: &Game) -> Play {
+        Play {
+            playtime_sec: g.playtime_sec,
+            sessions: g.sessions,
+            first_played: g.first_played,
+            last_played: g.last_played,
+            journal: g.journal.clone(),
+            restored_at: g.restored_at,
+        }
+    }
+
+    fn put(self, g: &mut Game) {
+        (g.playtime_sec, g.sessions, g.first_played, g.last_played, g.journal, g.restored_at) =
+            (self.playtime_sec, self.sessions, self.first_played, self.last_played, self.journal, self.restored_at);
+    }
+
+    /// Nothing worth a line in `play.json`: never played here, never reviewed.
+    fn is_empty(&self) -> bool {
+        self.playtime_sec == 0 && self.sessions == 0 && self.last_played.is_none() && self.journal.is_empty()
+    }
+}
+
+/// `users\<id>\play.json`.
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
+#[serde(default)]
+struct Plays {
+    games: std::collections::BTreeMap<String, Play>,
+}
+
+impl Plays {
+    fn of<'a>(games: impl IntoIterator<Item = &'a Game>) -> Plays {
+        Plays { games: games.into_iter().map(|g| (g.id.clone(), Play::of(g))).filter(|(_, p)| !p.is_empty()).collect() }
+    }
+
+    fn keeps(&self, id: &str) -> bool {
+        self.games.get(id).is_some_and(|p| !p.is_empty())
+    }
+}
+
 /// A Steam news item: plain text, `contents` about 300 characters.
 #[derive(Serialize, Deserialize, Clone, Default, Debug)]
 #[serde(default)]
@@ -146,9 +203,12 @@ pub struct News {
 struct Saved {
     games: Vec<Game>,
     kept: Vec<Game>,
+    /// whose time and journal are in `games` and `kept` (empty: nobody's, as in unit tests)
+    #[serde(skip)]
+    user: String,
 }
 
-static STATE: Mutex<Saved> = Mutex::new(Saved { games: Vec::new(), kept: Vec::new() });
+static STATE: Mutex<Saved> = Mutex::new(Saved { games: Vec::new(), kept: Vec::new(), user: String::new() });
 /// Sends the list to the page (app) or prints it (`--watch`).
 static NOTIFY: OnceLock<Box<dyn Fn(&[Game]) + Send + Sync>> = OnceLock::new();
 /// One enrichment at a time (the watcher, or `refresh` from the page).
@@ -305,7 +365,7 @@ fn journal() -> Vec<Game> {
 
 fn journal_list() -> Vec<Game> {
     let s = state();
-    s.games.iter().filter(|g| g.in_journal()).chain(&s.kept).cloned().collect()
+    s.games.iter().chain(&s.kept).filter(|g| g.in_journal()).cloned().collect()
 }
 
 /// Sets a game's journal, all of it (a field left out is cleared); kept games too. Resolves with the entry; the
@@ -325,20 +385,90 @@ fn set_journal(id: &str, journal: Journal) -> Result<Game, String> {
     Ok(g)
 }
 
-/// Takes a removed game out of the journal, with its art. A game still in the library can't be forgotten.
+/// Takes a removed game out of this user's journal; with its art too once no other user has it in theirs. A game
+/// still in the library can't be forgotten.
 #[tauri::command]
 fn forget(id: String) -> Result<(), String> {
-    let mut s = state();
-    let before = s.kept.len();
-    s.kept.retain(|k| k.id != id);
-    if s.kept.len() == before {
-        return Err(format!("{id} is not a removed game"));
+    let mut guard = state();
+    let s = &mut *guard;
+    let k = s.kept.iter_mut().find(|k| k.id == id && k.in_journal()).ok_or_else(|| format!("{id} is not a removed game"))?;
+    Play::default().put(k);
+    let others = others_keep(&s.user, &id);
+    if !others {
+        s.kept.retain(|k| k.id != id);
     }
-    changed(&s);
-    drop(s);
-    let _ = std::fs::remove_dir_all(game_dir(&id));
-    log(&format!("forgot {id}"));
+    changed(s);
+    drop(guard);
+    if !others {
+        let _ = std::fs::remove_dir_all(game_dir(&id));
+    }
+    log(&format!("forgot {id}{}", if others { " (another user keeps it)" } else { "" }));
     Ok(())
+}
+
+// ---------- users ----------
+
+fn plays_file(user: &str) -> PathBuf {
+    crate::users::dir_of(user).join("play.json")
+}
+
+fn read_plays(user: &str) -> Plays {
+    match std::fs::read_to_string(plays_file(user)) {
+        Ok(text) => serde_json::from_str(&text).unwrap_or_else(|e| {
+            log(&format!("{user}: play.json is not valid ({e}); starting empty"));
+            Plays::default()
+        }),
+        Err(_) => Plays::default(),
+    }
+}
+
+/// Puts `user`'s time and journal on the games, in place of whoever's were there.
+fn wear(s: &mut Saved, user: &str, mut plays: Plays) {
+    for g in s.games.iter_mut().chain(s.kept.iter_mut()) {
+        plays.games.remove(&g.id).unwrap_or_default().put(g);
+    }
+    s.user = user.to_string();
+}
+
+/// True if a user other than `me` has game `id` in their journal.
+fn others_keep(me: &str, id: &str) -> bool {
+    if me.is_empty() {
+        return false; // unit tests: no users
+    }
+    crate::users::ids().iter().filter(|u| u.as_str() != me).any(|u| read_plays(u).keeps(id))
+}
+
+/// Another user is playing: the games now carry their time and journal (all saved already). Sends the list.
+pub fn set_user(user: &str) {
+    let mut s = state();
+    if s.user == user {
+        return;
+    }
+    let plays = read_plays(user);
+    wear(&mut s, user, plays);
+    if let Some(notify) = NOTIFY.get() {
+        notify(&s.games);
+    }
+    log(&format!("now {user}'s time and journal"));
+}
+
+/// A user was deleted: removed games nobody has in their journal any more go, with their art.
+pub fn drop_unkept() {
+    let mut guard = state();
+    let s = &mut *guard;
+    let others: Vec<Plays> = crate::users::ids().iter().filter(|u| **u != s.user).map(|u| read_plays(u)).collect();
+    let gone: Vec<String> =
+        s.kept.iter().filter(|k| !k.in_journal() && !others.iter().any(|p| p.keeps(&k.id))).map(|k| k.id.clone()).collect();
+    if gone.is_empty() {
+        return;
+    }
+    s.kept.retain(|k| !gone.contains(&k.id));
+    changed(s);
+    drop(guard);
+    for id in &gone {
+        let _ = std::fs::remove_dir_all(game_dir(id));
+    }
+    log(&format!("dropped from the journal, nobody keeps them: {}", gone.join(", ")));
 }
 
 // ---------- backup (the cloud area) ----------
@@ -346,7 +476,8 @@ fn forget(id: String) -> Result<(), String> {
 /// The library and the journal's removed games, as backup entries.
 pub fn backup_entries() -> Vec<portable::Entry> {
     let s = state();
-    portable::export(&s.games, &s.kept)
+    let kept: Vec<Game> = s.kept.iter().filter(|k| k.in_journal()).cloned().collect();
+    portable::export(&s.games, &kept)
 }
 
 /// Merges a backup into the library and the journal; saves and sends the list if anything changed.
@@ -422,17 +553,51 @@ fn load() {
     for g in saved.games.iter_mut().chain(saved.kept.iter_mut()) {
         media_paths(g).for_each(|p| *p = to_absolute(p, &root));
     }
-    *state() = saved;
+    let user = crate::users::current_id();
+    // a library.json from before users holds the time and journal itself: they become the current (first) user's
+    let older = Plays::of(saved.games.iter().chain(&saved.kept));
+    let moving = !older.games.is_empty();
+    if moving && !plays_file(&user).exists() {
+        let written = serde_json::to_vec_pretty(&older).map_err(|e| e.to_string()).and_then(|t| write_file(&plays_file(&user), &t));
+        if let Err(e) = written {
+            // they stay in library.json, as the current user's, for the next start to move
+            log(&format!("moving the time and journal to {user}: {e}"));
+            *state() = Saved { user: String::new(), ..saved };
+            return;
+        }
+        log(&format!("moved the time and journal of {} games to {user}", older.games.len()));
+    }
+    let plays = read_plays(&user);
+    wear(&mut saved, &user, plays);
+    let mut s = state();
+    *s = saved;
+    if moving {
+        changed(&s); // library.json without them
+    }
 }
 
 /// Saves the library (art and media paths relative to the data dir) and sends it to the page (absolute).
 fn changed(s: &Saved) {
+    // the user's part first: then library.json goes without it
+    if !s.user.is_empty() {
+        match serde_json::to_vec_pretty(&Plays::of(s.games.iter().chain(&s.kept))) {
+            Ok(text) => {
+                if let Err(e) = write_file(&plays_file(&s.user), &text) {
+                    log(&format!("saving {}'s play.json: {e}", s.user));
+                }
+            }
+            Err(e) => log(&format!("play.json: {e}")),
+        }
+    }
     let root = data_root();
     let (mut games, mut kept) = (s.games.clone(), s.kept.clone());
     for g in games.iter_mut().chain(kept.iter_mut()) {
         media_paths(g).for_each(|p| *p = to_relative(p, &root));
+        if !s.user.is_empty() {
+            Play::default().put(g);
+        }
     }
-    match serde_json::to_vec_pretty(&Saved { games, kept }) {
+    match serde_json::to_vec_pretty(&Saved { games, kept, user: String::new() }) {
         Ok(text) => {
             if let Err(e) = write_file(&library_file(), &text) {
                 log(&format!("saving library.json: {e}"));
@@ -574,7 +739,7 @@ fn apply(p: &scan::Pass) {
     }
     for g in &p.left {
         let cur = s.games.iter().find(|c| c.id == g.id).unwrap_or(g).clone();
-        if cur.in_journal() {
+        if cur.in_journal() || others_keep(&s.user, &g.id) {
             let keep = kept_entry(cur.clone(), scan::ms(SystemTime::now()));
             prune(&game_dir(&g.id), &keep);
             s.kept.push(keep);
@@ -929,6 +1094,56 @@ mod tests {
         assert_eq!(g.folder, Path::new(r"W:\games-test\Hades"));
         media_paths(&mut g).for_each(|p| *p = to_absolute(p, root));
         assert_eq!(format!("{g:?}"), before);
+    }
+
+    #[test]
+    fn each_user_has_their_own_time_and_journal() {
+        let game = |id: &str| Game { id: id.into(), name: id.into(), ..Default::default() };
+        let mut s = Saved { games: vec![game("hades"), game("celeste")], kept: vec![game("sekiro")], user: String::new() };
+        let asha = Plays::of(&[
+            Game { playtime_sec: 3600, sessions: 2, last_played: Some(9), ..game("hades") },
+            Game { journal: Journal { rating: Some(5), ..Default::default() }, ..game("sekiro") },
+        ]);
+        let riya = Plays::of(&[Game { playtime_sec: 60, sessions: 1, last_played: Some(5), ..game("celeste") }]);
+        wear(&mut s, "asha", Plays { games: asha.games.clone() });
+        assert_eq!((s.user.as_str(), s.games[0].playtime_sec, s.games[1].playtime_sec), ("asha", 3600, 0));
+        assert_eq!(s.kept[0].journal.rating, Some(5));
+        assert_eq!(Plays::of(s.games.iter().chain(&s.kept)), asha, "what is saved is exactly hers");
+        wear(&mut s, "riya", Plays { games: riya.games.clone() });
+        assert_eq!((s.games[0].playtime_sec, s.games[0].sessions, s.games[1].playtime_sec), (0, 0, 60), "none of Asha's time shows");
+        assert!(!s.kept[0].in_journal(), "Asha's removed game isn't in Riya's journal");
+        assert_eq!(Plays::of(s.games.iter().chain(&s.kept)), riya);
+        assert!(asha.keeps("sekiro") && !riya.keeps("sekiro"));
+    }
+
+    #[test]
+    fn a_library_from_before_users_gives_its_time_to_the_first_user() {
+        let old = r#"{"games":[{"id":"hades","name":"Hades","playtimeSec":7200,"sessions":3,"lastPlayed":9,
+            "journal":{"rating":4}},{"id":"celeste","name":"Celeste"}],
+            "kept":[{"id":"sekiro","name":"Sekiro","playtimeSec":60,"removedAt":5,"restoredAt":6}]}"#;
+        let mut saved: Saved = serde_json::from_str(old).unwrap();
+        let older = Plays::of(saved.games.iter().chain(&saved.kept));
+        let ids: Vec<_> = older.games.keys().map(String::as_str).collect();
+        assert_eq!(ids, ["hades", "sekiro"], "unplayed games take no line");
+        assert_eq!(older.games["sekiro"].restored_at, Some(6));
+        wear(&mut saved, "first", older);
+        assert_eq!((saved.games[0].playtime_sec, saved.games[0].journal.rating), (7200, Some(4)));
+        assert_eq!((saved.kept[0].removed_at, saved.kept[0].restored_at), (Some(5), Some(6)));
+        // what library.json keeps of a game: no one's time
+        let mut shared = saved.games[0].clone();
+        Play::default().put(&mut shared);
+        let text = serde_json::to_string(&shared).unwrap();
+        assert!(text.contains("\"playtimeSec\":0") && !text.contains("\"rating\":4"), "{text}");
+    }
+
+    #[test]
+    fn a_removed_game_shows_only_in_the_journal_of_who_kept_it() {
+        state().kept.push(Game { id: "kept-by-other".into(), removed_at: Some(1), ..Default::default() });
+        assert!(!journal_list().iter().any(|g| g.id == "kept-by-other"));
+        assert!(!backup_entries().iter().any(|e| e.id == "kept-by-other"), "nor in this user's backup");
+        state().kept.iter_mut().filter(|k| k.id == "kept-by-other").for_each(|k| k.playtime_sec = 30);
+        assert!(journal_list().iter().any(|g| g.id == "kept-by-other"));
+        state().kept.retain(|k| k.id != "kept-by-other");
     }
 
     #[test]

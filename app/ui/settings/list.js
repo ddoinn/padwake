@@ -121,6 +121,8 @@ export class List {
     }
     const glyph = el.querySelector('.glyph');
     if (glyph) glyph.innerHTML = read(row.glyph) ?? '';
+    const icon = el.querySelector('.icon');
+    if (icon && row.icon && icon.dataset.was !== read(row.icon)) icon.innerHTML = icon.dataset.was = read(row.icon);
     el.querySelector('.tog')?.classList.toggle('on', !!read(row.get));
     const sld = el.querySelector('.sld');
     if (sld) sld.style.setProperty('--p', `${Math.round(Math.min(1, Math.max(0, read(row.get) ?? 0)) * 1000) / 10}%`);

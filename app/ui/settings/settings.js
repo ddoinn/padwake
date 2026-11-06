@@ -92,8 +92,8 @@ export default {
     pagesEl.append(view.el);
     view.el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 10 * FRAME, delay: 250, easing: 'ease-out', fill: 'backwards' });
     view.enter(null, 250 + 10 * FRAME);
-    const path = new URLSearchParams(location.search).get('settings');
-    if (path && host.isMock) await openPath(path); // test hook: ?settings=sound/1 opens a page and a category
+    const path = params.open ?? (host.isMock ? new URLSearchParams(location.search).get('settings') : null);
+    if (path) await openPath(path); // {open: 'users'} from Home's avatar; test hook: ?settings=sound/1 opens a page and a category
   },
 
   leave() {
@@ -134,7 +134,7 @@ class View {
   constructor(def) {
     this.def = def;
     this.el = document.createElement('div');
-    this.el.className = `spage${def.centred ? ' centred' : ''}`;
+    this.el.className = `spage${def.centred ? ' centred' : ''}${def.cls ? ` ${def.cls}` : ''}`;
     this.el.innerHTML = '<div class="stitle"></div><div class="scontent"></div>';
     this.el.querySelector('.stitle').textContent = def.title;
     this.content = this.el.querySelector('.scontent');
@@ -166,7 +166,20 @@ class OneList extends View {
     if (this.def.layout === 'info') return this.list.showBar();
     this.list.setActive(true, dir, ringAt);
   }
-  refresh() { this.list.refresh(); }
+  // rows from a function are read again: a page whose rows came or went (Users after an add) is rebuilt in place
+  refresh() {
+    const rows = read(this.def.rows);
+    const same = rows.length === this.list.rows.length && rows.every((r, i) => r.kind === this.list.rows[i].kind);
+    if (same) {
+      this.list.rows = rows;
+      return this.list.refresh();
+    }
+    const { index, active } = this.list;
+    this.list.el.remove();
+    this.build();
+    this.list.focus(Math.min(index, rows.length - 1));
+    if (active) this.list.setActive(true, null, 0);
+  }
   action(name, e) {
     const l = this.list;
     if (this.def.layout === 'info') {

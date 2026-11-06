@@ -7,7 +7,7 @@ mod crypto;
 mod github;
 mod update;
 
-pub use backup::library_changed;
+pub use backup::{library_changed, user_switched, while_switching};
 pub use update::{install_at_start, wait_for_previous, UPDATED_AT_START, UPDATE_FROM};
 
 use tauri::plugin::{Builder, TauriPlugin};
