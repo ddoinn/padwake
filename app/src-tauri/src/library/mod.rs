@@ -19,9 +19,13 @@
 //! - `library.json` keeps art and media paths relative to the data dir, so a copied or moved data dir keeps its art;
 //!   in memory, `list` and events they are absolute.
 //! - `padwake.exe --sync-once [--root <dir>]` runs one pass without a window; `--watch` keeps watching.
+//! - Each user's logs (rows B1, B1b): `sessions.jsonl` (`sessions.rs`) and `events.jsonl` (`events.rs`: journal edits,
+//!   user switches, Padwake started and stopped). A session cut short by a restart is logged at the next start.
 
 pub(crate) mod art; // also the users area's character pictures
+pub mod events;
 mod hltb;
+mod jsonl;
 pub mod portable;
 mod progress;
 mod scan;
@@ -107,7 +111,7 @@ pub struct Journal {
     pub note: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Status {
     Playing,
@@ -239,6 +243,8 @@ pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
         .invoke_handler(tauri::generate_handler![list, refresh, rescan, journal, review, forget])
         .setup(|app, _api| {
             load();
+            recover_open_session();
+            log_event(&state().user.clone(), events::What::Started { v: env!("CARGO_PKG_VERSION").into(), restarted: crate::startup::restarted() });
             let app = app.clone();
             let _ = NOTIFY.set(Box::new(move |games| {
                 let _ = app.emit("library", games);
@@ -252,6 +258,11 @@ pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
                 watch(None)
             })?;
             Ok(())
+        })
+        .on_event(|_app, event| {
+            if let tauri::RunEvent::Exit = event {
+                log_event(&state().user.clone(), events::What::Stopped {});
+            }
         })
         .build()
 }
@@ -291,21 +302,17 @@ fn rescan() -> Vec<Game> {
 }
 
 /// Row A5: a session of `secs` ended at `ended_at` (Unix ms). Adds it to the game's playtime and sessions, sets
-/// `lastPlayed` (and `firstPlayed` the first time), adds a line to the user's session log (row B1) and sends the
-/// list. False if there is no such game.
-pub fn record_session(id: &str, secs: u64, ended_at: u64) -> bool {
+/// `lastPlayed` (and `firstPlayed` the first time) and sends the list. Returns the Padwake trophies it earned, for its
+/// line in the session log (`log_session`, rows B1 and B1b); `None` if there is no such game.
+pub fn record_session(id: &str, secs: u64, ended_at: u64) -> Option<Vec<String>> {
     let mut s = state();
-    let Some(g) = s.games.iter_mut().find(|g| g.id == id) else { return false };
-    let session = sessions::Session::ended(id, secs, ended_at);
+    let g = s.games.iter_mut().find(|g| g.id == id)?;
+    let before = (g.playtime_sec, g.sessions);
     g.playtime_sec += secs;
     g.last_played = Some(ended_at);
     g.sessions += 1;
-    g.first_played.get_or_insert(session.start);
-    if !s.user.is_empty() {
-        if let Err(e) = sessions::append(&sessions::file(&s.user), &session) {
-            log(&format!("{}'s session log: {e}", s.user));
-        }
-    }
+    g.first_played.get_or_insert(sessions::Session::ended(id, secs, ended_at).start);
+    let trophies = sessions::trophies_earned(before, (g.playtime_sec, g.sessions));
     changed(&s);
     drop(s);
     // not in unit tests: it may go to the network
@@ -314,7 +321,83 @@ pub fn record_session(id: &str, secs: u64, ended_at: u64) -> bool {
         let id = id.to_string();
         let _ = std::thread::Builder::new().name("progress".into()).spawn(move || update_progress(&id));
     }
-    true
+    Some(trophies)
+}
+
+/// Adds a finished session to `user`'s log; the session under way is done with.
+pub fn log_session(user: &str, line: &sessions::Session) {
+    if let Err(e) = sessions::append(&sessions::file(user), line) {
+        log(&format!("{user}'s session log: {e}"));
+    }
+    drop_open_session(user, line);
+}
+
+/// One save or removal of a session under way at a time (a session ends while the next one starts).
+static OPEN: Mutex<()> = Mutex::new(());
+
+/// Keeps the line of `user`'s session under way, for a restart to log (`recover_open_session`).
+pub fn save_open_session(user: &str, line: &sessions::Session) {
+    let _one = OPEN.lock().unwrap_or_else(|e| e.into_inner());
+    if let Err(e) = sessions::save_open(&sessions::open_file(user), line) {
+        log(&format!("{user}'s session under way: {e}"));
+    }
+}
+
+/// Done with `line`'s session under way. Only its own: the next session (Switch Game) may have saved its own already.
+pub fn drop_open_session(user: &str, line: &sessions::Session) {
+    let _one = OPEN.lock().unwrap_or_else(|e| e.into_inner());
+    let path = sessions::open_file(user);
+    let open = std::fs::read(&path).ok().and_then(|b| serde_json::from_slice::<sessions::Session>(&b).ok());
+    if open.is_some_and(|o| o.same_session(line)) {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+/// At start: a session the current user had under way when Padwake stopped goes in their log, once. Without `ended`
+/// (a minute's copy) it ended "restart". It's counted now unless it was: counting sets the game's last play to its end,
+/// so a last play at or after its start means it was (sessions never overlap). The final copy is saved before it's
+/// counted, so a counted session's copy is always the exact line. A session already in the log isn't logged again.
+fn recover_open_session() {
+    let user = state().user.clone();
+    if user.is_empty() {
+        return;
+    }
+    let path = sessions::open_file(&user);
+    let Some(mut line) = sessions::take_open(&path) else { return };
+    if sessions::read(&sessions::file(&user)).iter().any(|s| s.same_session(&line)) {
+        return;
+    }
+    if line.ended.is_none() {
+        line.ended = Some("restart".into());
+    }
+    let counted = get(&line.game).and_then(|g| g.last_played).is_some_and(|t| t >= line.start);
+    if line.kind.is_none() && !counted {
+        match record_session(&line.game, line.secs, line.end) {
+            Some(trophies) => line.trophies = trophies,
+            None => return,
+        }
+    }
+    log(&format!("a session under way when Padwake stopped: {} s of {}", line.secs, line.app.as_deref().unwrap_or(&line.game)));
+    if let Err(e) = sessions::append(&sessions::file(&user), &line) {
+        log(&format!("{user}'s session log: {e}"));
+    }
+}
+
+/// Unlocked achievements on disk for a game with an unlock file (`progress.rs`), for its session line.
+pub fn unlocked(id: &str) -> Option<u32> {
+    let g = get(id)?;
+    progress::unlocks(&g.folder, g.steam_app_id).map(|u| u.unlocked)
+}
+
+/// Adds an event, dated now, to `user`'s event log (row B1b). Nobody (unit tests): nothing.
+pub fn log_event(user: &str, what: events::What) {
+    if user.is_empty() {
+        return;
+    }
+    let e = events::Event { at: scan::ms(SystemTime::now()), what };
+    if let Err(e) = events::append(&events::file(user), &e) {
+        log(&format!("{user}'s event log: {e}"));
+    }
 }
 
 // ---------- achievements and main-story length ----------
@@ -394,9 +477,16 @@ fn set_journal(id: &str, journal: Journal) -> Result<Game, String> {
     let mut guard = state();
     let s = &mut *guard;
     let g = s.games.iter_mut().chain(s.kept.iter_mut()).find(|g| g.id == id).ok_or_else(|| format!("no game {id}"))?;
-    g.journal = journal.cleaned();
+    let before = std::mem::replace(&mut g.journal, journal.cleaned());
     let g = g.clone();
     changed(s);
+    if !s.user.is_empty() {
+        for e in events::journal_changes(id, &before, &g.journal, scan::ms(SystemTime::now())) {
+            if let Err(err) = events::append(&events::file(&s.user), &e) {
+                log(&format!("{}'s event log: {err}", s.user));
+            }
+        }
+    }
     Ok(g)
 }
 
@@ -504,6 +594,15 @@ pub fn backup_sessions() -> Vec<sessions::Session> {
     sessions::read(&sessions::file(&user))
 }
 
+/// The current user's event log, for the backup.
+pub fn backup_events() -> Vec<events::Event> {
+    let user = state().user.clone();
+    if user.is_empty() {
+        return Vec::new();
+    }
+    events::read(&events::file(&user))
+}
+
 /// Merges a backup into the library, the journal and the session log; saves and sends the list if anything changed.
 pub fn restore(backup: &portable::Backup) -> portable::Restored {
     let mut guard = state();
@@ -514,6 +613,11 @@ pub fn restore(backup: &portable::Backup) -> portable::Restored {
             Ok(0) => {}
             Ok(n) => log(&format!("restored from backup: {n} sessions joined the log")),
             Err(e) => log(&format!("restoring {}'s session log: {e}", s.user)),
+        }
+        match events::absorb(&events::file(&s.user), &backup.events) {
+            Ok(0) => {}
+            Ok(n) => log(&format!("restored from backup: {n} events joined the log")),
+            Err(e) => log(&format!("restoring {}'s event log: {e}", s.user)),
         }
     }
     if r != portable::Restored::default() {
@@ -1053,23 +1157,85 @@ mod tests {
         clean();
         state().games.push(Game { id: "session-test".into(), playtime_sec: 60, ..Default::default() });
         state().user = asha.clone();
-        assert!(record_session("session-test", 90, 1_793_196_309_000));
+        // 60 s played before: this first session (as the games area logs it) earns First Steps
+        assert_eq!(record_session("session-test", 90, 1_793_196_309_000), Some(vec![]), "First Steps came at 60 s already");
+        let first = sessions::Session { from: Some("library".into()), ..sessions::Session::ended("session-test", 90, 1_793_196_309_000) };
+        log_session(&asha, &first);
         let g = get("session-test").unwrap();
         assert_eq!((g.playtime_sec, g.last_played), (150, Some(1_793_196_309_000)));
         // the first session recorded: it started 90 s before it ended
         assert_eq!((g.sessions, g.first_played), (1, Some(1_793_196_219_000)));
         state().user = riya.clone();
-        assert!(record_session("session-test", 30, 1_793_200_000_000));
+        let trophies = record_session("session-test", 30, 1_793_200_000_000).unwrap();
+        assert!(trophies.is_empty());
+        let second = sessions::Session { trophies, ..sessions::Session::ended("session-test", 30, 1_793_200_000_000) };
+        log_session(&riya, &second);
         let g = get("session-test").unwrap();
         assert_eq!((g.sessions, g.first_played, g.playtime_sec), (2, Some(1_793_196_219_000), 180));
-        assert!(!record_session("no-such-game", 90, 0));
+        assert_eq!(record_session("no-such-game", 90, 0), None);
+
+        // row B1b: Riya's session under way when Padwake stopped is logged at the next start, as "restart", and counted
+        let cut = sessions::Session { from: Some("home".into()), ..sessions::Session::ended("session-test", 3_420, 1_793_210_000_000) };
+        save_open_session(&riya, &cut);
+        recover_open_session();
+        let g = get("session-test").unwrap();
+        assert_eq!((g.sessions, g.playtime_sec), (3, 3_600), "its time up to the last minute seen counts");
+        let restarted = sessions::Session { ended: Some("restart".into()), ..cut.clone() };
+        // one counted already (Padwake stopped after counting it, before its line): logged as it is, not counted again
+        let counted = sessions::Session { ended: Some("close".into()), ..sessions::Session::ended("session-test", 60, 1_793_220_000_000) };
+        record_session("session-test", 60, 1_793_220_000_000).unwrap();
+        save_open_session(&riya, &counted);
+        recover_open_session();
+        assert_eq!(get("session-test").unwrap().sessions, 4, "not counted twice");
+        recover_open_session();
+        assert!(!sessions::open_file(&riya).exists(), "the session under way is done with");
+        // its exact line saved, then Padwake stopped before counting it: counted now, once, with all its seconds
+        let uncounted = sessions::Session { ended: Some("crash".into()), exit: Some(1), ..sessions::Session::ended("session-test", 120, 1_793_230_000_000) };
+        save_open_session(&riya, &uncounted);
+        recover_open_session();
+        let g = get("session-test").unwrap();
+        assert_eq!((g.sessions, g.playtime_sec, g.last_played), (5, 3_600 + 60 + 120, Some(1_793_230_000_000)));
+        // already in the log (a late copy of the session under way): not logged twice
+        let logged = sessions::Session { ended: Some("quit".into()), ..sessions::Session::ended("session-test", 30, 1_793_240_000_000) };
+        record_session("session-test", 30, 1_793_240_000_000).unwrap();
+        log_session(&riya, &logged);
+        save_open_session(&riya, &sessions::Session { ended: None, ..logged.clone() });
+        recover_open_session();
+        // the next session's copy stays when the last one is done with (Switch Game)
+        let next = sessions::Session::ended("session-test", 10, 1_793_250_000_000);
+        save_open_session(&riya, &next);
+        drop_open_session(&riya, &logged);
+        assert!(sessions::open_file(&riya).exists(), "not this session's copy");
+        drop_open_session(&riya, &next);
+        assert!(!sessions::open_file(&riya).exists());
+
+        // row B1b: journal edits are events in the log of whoever made them, without the note's text
+        set_journal("session-test", Journal { rating: Some(4), status: Some(Status::Playing), note: Some("a secret note".into()) }).unwrap();
+        set_journal("session-test", Journal { rating: Some(4), ..Default::default() }).unwrap();
         state().user.clear();
         state().games.retain(|g| g.id != "session-test");
 
-        let first = sessions::Session::ended("session-test", 90, 1_793_196_309_000);
         assert_eq!(sessions::read(&sessions::file(&asha)), [first]);
-        let second = sessions::Session::ended("session-test", 30, 1_793_200_000_000);
-        assert_eq!(sessions::read(&sessions::file(&riya)), [second], "Riya's session is in her own log only");
+        let riyas = sessions::read(&sessions::file(&riya));
+        assert_eq!(riyas, [second, restarted, counted, uncounted, logged], "Riya's sessions are in her own log only, each once");
+        let mine: Vec<events::What> = events::read(&events::file(&riya))
+            .into_iter()
+            .map(|e| e.what)
+            .filter(|w| matches!(w, events::What::Status { game, .. } | events::What::Rating { game, .. } | events::What::Note { game, .. } if game == "session-test"))
+            .collect();
+        let game = || "session-test".to_string();
+        assert_eq!(
+            mine,
+            [
+                events::What::Status { game: game(), status: Some(Status::Playing) },
+                events::What::Rating { game: game(), rating: Some(4) },
+                events::What::Note { game: game(), note: true },
+                events::What::Status { game: game(), status: None },
+                events::What::Note { game: game(), note: false },
+            ]
+        );
+        assert!(!std::fs::read_to_string(events::file(&riya)).unwrap().contains("secret"));
+        assert!(!events::file(&asha).exists() || !std::fs::read_to_string(events::file(&asha)).unwrap().contains("session-test"));
         clean();
     }
 

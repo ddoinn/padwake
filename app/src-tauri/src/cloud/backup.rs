@@ -7,13 +7,13 @@
 //! - Each library change (a session ends, a review) marks the backup due; 2 min after the last change, when no game
 //!   runs, the gist is updated (setting `backupAuto`, on by default). Unchanged content isn't sent again. What is sent
 //!   keeps the other PC's games, time and sessions (`portable::combine`, `sessions::merge`), so declining a restore
-//!   loses nothing. The user's session log (row B1) goes with it.
+//!   loses nothing. The user's session log (row B1) and event log (row B1b) go with it, merged without doubles.
 //! - State: `backup.json` (login, gist id, last save and its content hash). Events: `backup` with the status.
 //! - Each user (`users/mod.rs`) backs up to their own GitHub account: `backup.json` and `github.token` are in the
 //!   user's folder, and the status is the current user's. A switch waits for an upload under way and stops a sign-in.
 
 use super::github::{self, Http, Poll};
-use crate::library::portable::{self, Backup, Entry, Restored, Session};
+use crate::library::portable::{self, Backup, Entry, Event, Restored, Session};
 use crate::system::log;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -237,7 +237,8 @@ pub fn save<R: Runtime>(app: &AppHandle<R>) -> Result<Status, String> {
     let token = token().ok_or("Sign in to GitHub first.")?;
     let local = crate::library::backup_entries();
     let sessions = crate::library::backup_sessions();
-    let hash = super::crypto::sha256_hex(&serde_json::to_vec(&(&local, &sessions)).map_err(|e| e.to_string())?)?;
+    let events = crate::library::backup_events();
+    let hash = super::crypto::sha256_hex(&serde_json::to_vec(&(&local, &sessions, &events)).map_err(|e| e.to_string())?)?;
     let saved = live().saved.clone();
     if saved.gist_id.is_some() && saved.hash.as_deref() == Some(hash.as_str()) {
         return Ok(status());
@@ -246,7 +247,7 @@ pub fn save<R: Runtime>(app: &AppHandle<R>) -> Result<Status, String> {
         l.state = State::Saving;
         l.error = None;
     });
-    let result = upload(&token, saved.gist_id.clone(), local, sessions);
+    let result = upload(&token, saved.gist_id.clone(), local, sessions, events);
     match result {
         Ok((gist_id, at)) => {
             let saved = update(app, |l| {
@@ -263,9 +264,15 @@ pub fn save<R: Runtime>(app: &AppHandle<R>) -> Result<Status, String> {
     }
 }
 
-/// Sends `local` and `sessions` (combined with what is there) to the gist, creating it if needed. Returns the gist id and
-/// the time.
-fn upload(token: &str, gist_id: Option<String>, local: Vec<Entry>, sessions: Vec<Session>) -> Result<(String, u64), String> {
+/// Sends `local`, `sessions` and `events` (combined with what is there) to the gist, creating it if needed. Returns the
+/// gist id and the time.
+fn upload(
+    token: &str,
+    gist_id: Option<String>,
+    local: Vec<Entry>,
+    sessions: Vec<Session>,
+    events: Vec<Event>,
+) -> Result<(String, u64), String> {
     let http = Http::new();
     let mut id = match gist_id {
         Some(id) => Some(id),
@@ -289,6 +296,7 @@ fn upload(token: &str, gist_id: Option<String>, local: Vec<Entry>, sessions: Vec
         machine: std::env::var("COMPUTERNAME").unwrap_or_default(),
         games: portable::combine(local, &remote.games),
         sessions: crate::library::sessions::merge(&sessions, &remote.sessions),
+        events: crate::library::events::merge(&events, &remote.events),
     };
     let text = serde_json::to_string_pretty(&backup).map_err(|e| e.to_string())?;
     if let Some(g) = &id {

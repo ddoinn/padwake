@@ -63,6 +63,43 @@ the row when it's done. B1 is worth a release of its own, so the log starts coll
     ids in a merged log; match by `portable.rs`'s rules if that ever matters. A PC still on 0.3.4 that uploads drops
     the log from the gist, but the next upload from a PC with B1 puts it back (its own log is merged in).
 
+### Row B1b: Log everything cheap about play (each user's)
+
+Decisions (2026-11-08, Madhav: "log everything you can so that we can make detailed stats"):
+1. Padwake writes down what it can learn cheaply about each session, so later rows can build detailed stats. No UI.
+2. All of it stays on the PC, except the user's own private backup gist.
+3. Never logged: FPS, GPU or temperature sampling, single keys or buttons, window titles, search text, note text.
+4. It mustn't cost anything you'd notice: running-game CPU and Home idle cost stay within `docs/performance.md`.
+   Only OS events and job counters, with idle checked at most once a minute.
+
+- **Outcome:**
+  - Each line in `sessions.jsonl` gets new optional fields. Lines from B1 still read.
+    - Where the time went: seconds with the game in front, Home (any Padwake screen), Control Center, or another app
+      in front. This comes from `games/front.rs` foreground events, Guide, and the page reporting its top screen.
+      Windows' alt-tab switcher, taskbar and desktop don't count as another app. After alt-tab, the window picked
+      sometimes gets no event, so each event arms a single re-read of the foreground 500 ms later.
+    - Idle seconds: stretches of 5+ min with no pad, keyboard or mouse input, checked once a minute.
+    - Launch to first window (ms). Where it was launched from: Home, Library, Search or Switch Game.
+    - How it ended: quit, Close Game, crash (a non-zero exit, with the code) or Padwake restart.
+    - The job's CPU time and peak memory, read once at the end. Best effort: processes outside the job aren't counted.
+    - At start and at end: pad name, connection and battery; display mode and HDR; AC or battery, and battery %.
+    - Guide opens, screenshots taken, Padwake trophies earned, achievements before→after (when an unlock file
+      exists), and the Padwake version.
+  - Media apps (YouTube, Netflix, …) log lines too, with `"kind":"media"` and the app. They add no playtime.
+  - A session cut short by a Padwake restart is still logged. A small file next to the log is updated once a minute
+    while a game runs. At the next start it becomes a line ending "restart", and its time counts up to the last
+    minute seen, so the log and `play.json` still agree.
+  - A new `users\<id>\events.jsonl` with dated events: journal status set or cleared, rating changed, note edited
+    (no text), user switched to, Padwake started and stopped. It goes in the backup and merges without doubles.
+  - `addedAt` on library games (shared) was already there: every game gets it when its folder joins (0.1.0).
+- **Done when:** unit tests for every field and for the backup merge of events. A live debug run (own data folder,
+  test pad) of a stand-in from `W:\games-test` plays two sessions, one ended with Close Game and one alt-tabbed, and
+  their lines show the right values. `cargo test --lib --locked` passes, and so do the UI probe checks in
+  `DEVELOPMENT.md`. Running-game CPU and Home idle cost are measured against `docs/performance.md`.
+- **Owns:** `app/src-tauri/src/library/{sessions,events,jsonl}.rs`, `games/{mod,stats,session,front}.rs`, the backup
+  (`library/portable.rs`, `cloud/backup.rs`). `from` and the top-screen report in `app/ui/{app,host}.js`,
+  `home/home.js`, `library/library.js`, `search/search.js`.
+
 ### Row B2: Display settings per game (shared)
 - **Outcome:**
   - The Options menu (Menu on a game, `openMenu` in `home.js`) gets "Display for This Game". It offers the modes

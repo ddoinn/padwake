@@ -46,6 +46,7 @@ pub fn take<R: Runtime>(app: &AppHandle<R>, id: &str, name: &str, tile: Option<P
         let message = match &result {
             Ok(Some(path)) => {
                 super::log(&format!("capture: {}", path.display()));
+                super::screenshot_saved(&id);
                 "Screenshot saved."
             }
             Ok(None) => {

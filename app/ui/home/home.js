@@ -88,6 +88,7 @@ let topIndex = 0, heroIndex = 0, cardIndex = 0, menuIndex = 0;
 let menuFrom = 'row', menuItems = [], cards = [], hubGame = null;
 let running = null;           // the running game's id ('game' events)
 let switchTo = null;          // the game to start once the running one has closed (askSwitch)
+let cameFrom = null;          // {id, from}: the Library or Search opened Home on this game (the session log's "from")
 let dark = false;             // blacked out since a launch: comes in (reveal) when Home is next entered
 let onTop = false;
 // motion state
@@ -164,8 +165,9 @@ export default {
     setGames(await host.library.list());
   },
 
-  enter({ focus, back } = {}) {
+  enter({ focus, back, from } = {}) {
     onTop = true;
+    if (focus && from) cameFrom = { id: focus, from };
     const i = items.findIndex(it => it.id === focus);
     if (i >= 0 && i !== index) { index = i; showNow(); }
     // woken over a running game (Guide hold, or Home from Control Center over it): Home comes in from black. Not when
@@ -177,6 +179,7 @@ export default {
   // another screen on top (Control Center, Search) or a game: the viewer closes and the trailer stops
   leave() {
     onTop = false;
+    cameFrom = null;
     if (run) { stopRun(); showNow(); }
     stopVideo();
   },
@@ -516,7 +519,7 @@ function activate() {
   const it = items[index];
   if (!it) return false;
   if (it.kind === 'library') { holdPreview(); app.go('library'); return true; }
-  if (it.kind === 'media') return host.media.open ? (host.media.open(it.id).catch(e => console.warn('media', e)), true) : false;
+  if (it.kind === 'media') return host.media.open ? (host.media.open(it.id, 'home').catch(e => console.warn('media', e)), true) : false;
   return launch(it.g);
 }
 
@@ -1521,10 +1524,14 @@ function track(a) {
 }
 
 // UI fades out (167 ms), the art holds (300 ms), the launch screen cross-fades in over it (200 ms), then the game starts
-function launch(g) {
+// `from` (the session log): 'switch' after another game closed for it; else the Library or Search if one opened Home
+// on this game, else Home
+function launch(g, from) {
   if (!g) return false;
   if (running === g.id) return resume();
   if (running) return askSwitch(g);
+  const origin = from ?? (cameFrom?.id === g.id ? cameFrom.from : 'home');
+  cameFrom = null;
   if (zone === 'menu') closeMenu();
   zone = 'busy';
   stopVideo();
@@ -1541,7 +1548,7 @@ function launch(g) {
   launchTimer = setTimeout(() => {
     warm = warmControlCenter(app, g);
     launchTimer = setTimeout(() => warm.then(() => {
-      if (zone === 'busy') host.games.launch(g.id).catch(err => { console.warn('launch', err); returnHome(); });
+      if (zone === 'busy') host.games.launch(g.id, origin).catch(err => { console.warn('launch', err); returnHome(); });
     }), 29 * FRAME);
   }, 11 * FRAME);
   return true;
@@ -1644,7 +1651,7 @@ function gameEvent({ id, state, front }) {
     // Switch: the game the player picked starts now
     const next = switchTo && games.find(x => x.id === switchTo);
     switchTo = null;
-    if (next) { focusItem(next.id); launch(next); }
+    if (next) { focusItem(next.id); launch(next, 'switch'); }
   }
 }
 

@@ -272,10 +272,10 @@ function open(i) {
     zone = results.length ? 'results' : 'field';
     index = i;
     paint();
-    host.media.open(g.id).catch(err => console.warn('media', err));
+    host.media.open(g.id, 'search').catch(err => console.warn('media', err));
     return true;
   }
-  app.go('home', { focus: g.id });
+  app.go('home', { focus: g.id, from: 'search' });
   return true;
 }
 

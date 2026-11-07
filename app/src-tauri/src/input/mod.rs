@@ -6,7 +6,7 @@
 mod test_hook;
 mod xinput;
 
-pub use xinput::Pad;
+pub use xinput::{last_change, last_pad, Pad};
 
 use tauri::plugin::{Builder, TauriPlugin};
 use tauri::Runtime;
