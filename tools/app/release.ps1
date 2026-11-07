@@ -57,6 +57,9 @@ else {
 $env:RUSTUP_HOME = 'W:\system\tools\rust\rustup'; $env:CARGO_HOME = 'W:\system\tools\rust\cargo'
 $env:PATH = "W:\system\tools\rust\cargo\bin;$env:PATH"; $env:CARGO_TARGET_DIR = $Target
 Push-Location "$root\app"
+# Padwake's own build output starts clean: a build stopped part way (0.3.3) left its embedded pages broken, and the
+# next build reused them ("asset not found: index.html"). Dependencies stay cached.
+try { cargo clean --release -p padwake --manifest-path "$root\app\src-tauri\Cargo.toml" 2>&1 | Out-Null } catch {}
 try { npx tauri build --no-bundle; if ($LASTEXITCODE) { throw "build failed ($LASTEXITCODE)" } }
 catch { Restore; throw }
 finally { Pop-Location }
