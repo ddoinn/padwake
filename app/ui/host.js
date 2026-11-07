@@ -56,7 +56,8 @@ export const host = {
     captures: () => call('games', 'captures'),
     deleteCapture: path => call('games', 'delete_capture', { path }),
   },
-  // A game: {id, name, folder, exe, art: {tile, background, logo, cover}, tagline, description, screenshots[], trailer,
+  // A game: {id, name, folder, exe, store (a game installed with a launcher: {name: steam | epic | gog | xbox | ea, id,
+  // uri}; null for a folder in the games folder), art: {tile, background, logo, cover}, tagline, description, screenshots[], trailer,
   // music, news: [{title, url, date, contents}], playtimeSec, lastPlayed, firstPlayed, sessions, journal: {rating 1–5,
   // status: playing | finished | completed (100 %) | paused | dropped, note}, addedAt, steamAppId,
   // achievements ({unlocked, total}, read from the game's files; null when it recorded none), hltbMainSec (the main
@@ -161,7 +162,7 @@ const query = new URLSearchParams(location.search);
 const slug = name => name.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || 'game';
 const mockGame = name => ({
   id: slug(name), name, folder: `W:\\games-test\\${name}`, exe: `W:\\games-test\\${name}\\${name.replace(/[^A-Za-z0-9]/g, '')}.exe`,
-  art: { tile: null, background: null, logo: null, cover: null }, tagline: null, description: null, screenshots: [],
+  store: null, art: { tile: null, background: null, logo: null, cover: null }, tagline: null, description: null, screenshots: [],
   trailer: null, music: null, news: [], playtimeSec: 0, lastPlayed: null, firstPlayed: null, sessions: 0,
   journal: { rating: null, status: null, note: null }, addedAt: null, steamAppId: null,
 });
@@ -180,6 +181,21 @@ function cleanJournal(j = {}) {
 const mockLibrary = ['Celeste', 'Cyberpunk 2077', 'Dark Souls Remastered', 'Elden Ring', 'Ghost of Tsushima DC', 'God of War',
   'Hades', 'Hollow Knight', 'Horizon Zero Dawn', 'Red Dead Redemption 2', 'Sekiro - Shadows Die Twice', 'Spider-man Remastered',
   'Stand-in Long'].map(mockGame);
+// ?stores=1: games installed with store launchers too (library/stores.rs), after the folders; settings.storesOff hides
+// a store's games, as a rescan does on the PC
+const mockStoreGames = query.get('stores') === '1' ? [
+  ['Portal 2', 'steam', '620', 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Portal 2', 'portal2.exe', 'steam://rungameid/620'],
+  ['Alan Wake 2', 'epic', 'Iris', 'C:\\Program Files\\Epic Games\\AlanWake2', 'AlanWake2.exe', 'com.epicgames.launcher://apps/dc9d%3Aa9d%3AIris?action=launch&silent=true'],
+  ['Disco Elysium', 'gog', '1771589310', 'C:\\GOG Games\\Disco Elysium', 'disco.exe', null],
+  ['Halo Infinite', 'xbox', 'Microsoft.254428597CFE2_8wekyb3d8bbwe', 'D:\\XboxGames\\Halo Infinite\\Content', 'HaloInfinite.exe', 'shell:AppsFolder\\Microsoft.254428597CFE2_8wekyb3d8bbwe!Game'],
+  ['Mass Effect Legendary Edition', 'ea', 'Origin.OFR.50.0004096', 'C:\\Program Files\\EA Games\\Mass Effect Legendary Edition', 'MassEffectLauncher.exe', null],
+].map(([name, store, id, folder, exe, uri]) => ({ ...mockGame(name), folder, exe: `${folder}\\${exe}`, store: { name: store, id, uri }, steamAppId: store === 'steam' ? +id : null })) : [];
+mockLibrary.push(...mockStoreGames);
+function mockSyncStores() {
+  const off = mockSettings.storesOff ?? [];
+  const keep = mockLibrary.filter(g => !g.store);
+  mockLibrary.splice(0, mockLibrary.length, ...keep, ...mockStoreGames.filter(g => !off.includes(g.store.name)));
+}
 const mockSettings = { gamesRoot: 'W:\\games-test', rumble: true, uiSounds: true, music: true };
 let mockRunning = null;
 let mockSession = null;
@@ -420,7 +436,12 @@ const MOCK = {
   },
   settings: {
     get: () => mockSettings,
-    set: ({ patch }) => (Object.assign(mockSettings, patch), emit('settings', mockSettings), mockSettings),
+    set: ({ patch }) => {
+      Object.assign(mockSettings, patch);
+      emit('settings', mockSettings);
+      if ('storesOff' in patch) mockSyncStores();
+      return mockSettings;
+    },
     folder_exists: ({ path }) => /^[a-z]:\\/i.test(path) && !/missing/i.test(path),
   },
   // ---- Settings (rows A9, A10): a living-room PC with two outputs, one pad, a 1080p display and Wi-Fi

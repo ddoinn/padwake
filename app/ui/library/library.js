@@ -46,6 +46,9 @@ const MARQUEE_DELAY = 1900, MARQUEE_PX_MS = 60 / 1000, MARQUEE_GAP = 64;
 const MENU_MS = 150;
 const BAR = { top: 338, len: 704, min: 168, hideAfter: 3000 };
 
+// the stores the library imports installed games from (library/stores.rs), as `game.store.name` and settings.storesOff
+// name them, and their names on screen
+export const STORES = [['steam', 'Steam'], ['epic', 'Epic Games'], ['gog', 'GOG'], ['xbox', 'Xbox'], ['ea', 'EA app']];
 export const SORTS = [
   { id: 'played', label: 'Recently played' },
   { id: 'added', label: 'Recently added' },
@@ -211,7 +214,7 @@ function paintCounts() {
 function paintEmpty() {
   if (!$.empty) return;
   $.empty.querySelector('.sub').textContent =
-    `Put each game in its own folder in ${gamesRoot || 'the games folder'}. New folders show up here a few minutes after they stop changing.`;
+    `Put each game in its own folder in ${gamesRoot || 'the games folder'}, or install games with Steam, Epic Games, GOG, Xbox or the EA app. New folders show up here a few minutes after they stop changing.`;
 }
 
 // ---------- the grid ----------

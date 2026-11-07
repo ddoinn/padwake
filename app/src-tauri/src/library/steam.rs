@@ -307,9 +307,19 @@ pub fn pause_check(stop: &dyn Fn() -> bool) -> Result<(), String> {
 /// `stop` turns true (a game started): it is checked before every download and every image or ffmpeg step.
 pub fn enrich(http: &Http, game: &Game, dir: &Path, ffmpeg: Option<&Path>, stop: &dyn Fn() -> bool) -> Result<Found, String> {
     pause_check(stop)?;
-    let folder_name = game.folder.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    let tried = queries(&folder_name, &game.name);
-    let id = find_app(http, &tried, stop)?.ok_or_else(|| format!("no Steam match (tried: {})", tried.join(" | ")))?;
+    let id = match (&game.store, game.steam_app_id) {
+        // Steam said which app it is
+        (Some(s), Some(id)) if s.name == super::stores::StoreName::Steam => id,
+        _ => {
+            // a store's folder name says little (an Xbox game's is "Content"): its name does
+            let folder_name = match &game.store {
+                Some(_) => game.name.clone(),
+                None => game.folder.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+            };
+            let tried = queries(&folder_name, &game.name);
+            find_app(http, &tried, stop)?.ok_or_else(|| format!("no Steam match (tried: {})", tried.join(" | ")))?
+        }
+    };
     pause_check(stop)?;
     let details = http.json(&format!("{STORE}/appdetails?appids={id}&l=english&cc=US"))?;
     let d = &details[id.to_string()]["data"];

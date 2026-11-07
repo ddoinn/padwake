@@ -1,6 +1,7 @@
 //! The folder side of the library, ported from `extras/antcloud/sync.ps1`: which folders are games, which exe
 //! starts each one, when a new folder is quiet enough to join, and stable ids. No network here.
 
+use super::stores::Installed;
 use super::Game;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -128,13 +129,24 @@ impl Pass {
     }
 }
 
-/// Matches the folders against the library. Known folders keep their entry (and id); quiet new folders with an exe
-/// join, taking back the id, playtime and journal of a game that was removed from the same folder (`kept`); entries
-/// whose folder is gone leave. An unplayed game's exe is picked again, as sync.ps1 does for games added mid-install.
-pub fn pass(known: &[Game], kept: &[Game], folders: &[PathBuf], now: SystemTime, quiet: Duration) -> Pass {
+/// True if `inner` is `outer` or inside it.
+fn within(inner: &Path, outer: &Path) -> bool {
+    let (i, o) = (key(inner), key(outer));
+    i == o || i.strip_prefix(&o).is_some_and(|rest| rest.starts_with('\\'))
+}
+
+/// Matches the folders and the store games against the library. Known folders keep their entry (and id); quiet new
+/// folders with an exe join, taking back the id, playtime and journal of a game that was removed from the same folder
+/// (`kept`); entries whose folder is gone leave. An unplayed game's exe is picked again, as sync.ps1 does for games
+/// added mid-install. Store games (`stores.rs`) join at once, since their launcher says they are installed, and leave
+/// when it no longer lists them; a games-root folder that is or holds a store game's folder is left to the store.
+pub fn pass(known: &[Game], kept: &[Game], folders: &[PathBuf], stores: &[Installed], now: SystemTime, quiet: Duration) -> Pass {
     let mut by_folder: HashMap<String, &Game> = known.iter().map(|g| (key(&g.folder), g)).collect();
     let mut taken: HashSet<String> = known.iter().chain(kept).map(|g| g.id.clone()).collect();
+    // kept entries already given back in this pass: each comes back once
+    let mut restored: HashSet<String> = HashSet::new();
     let mut p = Pass::default();
+    let folders = folders.iter().filter(|f| !stores.iter().any(|s| within(&s.folder, f)));
     for folder in folders {
         if let Some(g) = by_folder.remove(&key(folder)) {
             let mut g = g.clone();
@@ -143,6 +155,10 @@ pub fn pass(known: &[Game], kept: &[Game], folders: &[PathBuf], now: SystemTime,
                     g.exe = exe;
                     p.exe_changed.push(g.id.clone());
                 }
+            }
+            // a store game whose store was turned off, in the games folder: it starts from its exe now
+            if g.store.take().is_some() && !p.exe_changed.contains(&g.id) {
+                p.exe_changed.push(g.id.clone());
             }
             p.games.push(g);
             continue;
@@ -157,18 +173,79 @@ pub fn pass(known: &[Game], kept: &[Game], folders: &[PathBuf], now: SystemTime,
         };
         let name = folder.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         // the same folder, or a folder of the same name (a games folder moved, or a game restored from a backup)
-        let back = kept
+        let free: Vec<&Game> = kept.iter().filter(|k| !restored.contains(&k.id)).collect();
+        let back = free
             .iter()
             .find(|k| key(&k.folder) == key(folder))
-            .or_else(|| kept.iter().find(|k| k.folder.file_name().is_some_and(|n| n.eq_ignore_ascii_case(&name))));
+            .or_else(|| free.iter().find(|k| k.folder.file_name().is_some_and(|n| n.eq_ignore_ascii_case(&name))))
+            .copied();
         let id = match back {
-            Some(k) => k.id.clone(),
+            Some(k) => {
+                restored.insert(k.id.clone());
+                k.id.clone()
+            }
             None => unique(&slug(&name), &taken),
         };
         taken.insert(id.clone());
         let mut g = Game { id, name, folder: folder.clone(), exe, added_at: Some(ms(now)), ..Default::default() };
         if let Some(k) = back {
             // the journal's entry comes back whole, with the art it kept until enrichment fetches it again
+            g.playtime_sec = k.playtime_sec;
+            g.last_played = k.last_played;
+            g.first_played = k.first_played;
+            g.sessions = k.sessions;
+            g.journal = k.journal.clone();
+            g.art = k.art.clone();
+        }
+        p.joined.push(g.id.clone());
+        p.games.push(g);
+    }
+    for s in stores {
+        if let Some(g) = by_folder.remove(&key(&s.folder)) {
+            let mut g = g.clone();
+            // a folder game the store now knows, or a launch that changed (an update moved the exe)
+            let exe = s.exe.clone().unwrap_or_else(|| g.exe.clone());
+            if g.store.as_ref() != Some(&s.store) || g.exe != exe {
+                (g.store, g.exe) = (Some(s.store.clone()), exe);
+                // Steam says which app it is: a different match from the name search is fetched again
+                if s.steam_app_id.is_some() && g.steam_app_id != s.steam_app_id {
+                    (g.steam_app_id, g.synced_at) = (s.steam_app_id, None);
+                }
+                p.exe_changed.push(g.id.clone());
+            }
+            p.games.push(g);
+            continue;
+        }
+        // the same store game, the same folder, the same Steam app, or (from a backup, which keeps no store) the same
+        // name. Not a folder of the same name: every Xbox game's folder is called Content.
+        let free: Vec<&Game> = kept.iter().filter(|k| !restored.contains(&k.id)).collect();
+        let back = free
+            .iter()
+            .find(|k| k.store.as_ref().is_some_and(|ks| ks.name == s.store.name && ks.id == s.store.id))
+            .or_else(|| free.iter().find(|k| key(&k.folder) == key(&s.folder)))
+            .or_else(|| free.iter().find(|k| s.steam_app_id.is_some() && k.steam_app_id == s.steam_app_id))
+            .or_else(|| free.iter().find(|k| k.store.is_none() && k.name.eq_ignore_ascii_case(&s.name)))
+            .copied();
+        let id = match back {
+            Some(k) => {
+                restored.insert(k.id.clone());
+                k.id.clone()
+            }
+            None => unique(&slug(&s.name), &taken),
+        };
+        taken.insert(id.clone());
+        let exe = s.exe.clone().or_else(|| pick_exe(&s.folder)).unwrap_or_default();
+        let mut g = Game {
+            id,
+            name: s.name.clone(),
+            folder: s.folder.clone(),
+            exe,
+            store: Some(s.store.clone()),
+            steam_app_id: s.steam_app_id,
+            added_at: Some(ms(now)),
+            ..Default::default()
+        };
+        if let Some(k) = back {
             g.playtime_sec = k.playtime_sec;
             g.last_played = k.last_played;
             g.first_played = k.first_played;
@@ -199,6 +276,7 @@ pub fn ms(t: SystemTime) -> u64 {
 
 #[cfg(test)]
 mod tests {
+    use super::super::stores::{Store, StoreName};
     use super::*;
     use std::fs::{File, FileTimes};
     use std::os::windows::fs::FileTimesExt;
@@ -286,11 +364,11 @@ mod tests {
         assert!(!is_quiet(&t.0.join("New"), SystemTime::now(), q));
 
         let folders = folders(&t.0).unwrap();
-        let p = pass(&[], &[], &folders, SystemTime::now(), q);
+        let p = pass(&[], &[], &folders, &[], SystemTime::now(), q);
         assert!(p.games.is_empty() && !p.changed());
         assert_eq!(p.waiting.len(), 2); // Empty and New
         t.age("New", Duration::from_secs(200));
-        let p = pass(&[], &[], &folders, SystemTime::now(), q);
+        let p = pass(&[], &[], &folders, &[], SystemTime::now(), q);
         assert_eq!(p.joined, ["new"]);
     }
 
@@ -300,7 +378,7 @@ mod tests {
         for n in ["Spider-Man", "Hades", "Spider Man"] {
             t.file(&format!("{n}/x.exe"), 1);
         }
-        let scan = |known: &[Game], kept: &[Game]| pass(known, kept, &folders(&t.0).unwrap(), SystemTime::now(), Duration::ZERO);
+        let scan = |known: &[Game], kept: &[Game]| pass(known, kept, &folders(&t.0).unwrap(), &[], SystemTime::now(), Duration::ZERO);
         let first = scan(&[], &[]);
         let ids: Vec<_> = first.games.iter().map(|g| g.id.as_str()).collect();
         assert_eq!(ids, ["hades", "spider-man", "spider-man-2"]); // A–Z: "Spider Man" sorts before "Spider-Man"
@@ -330,6 +408,115 @@ mod tests {
         assert_eq!((hades.playtime_sec, hades.sessions, hades.journal.rating), (3600, 4, Some(5)));
     }
 
+    fn installed(store: StoreName, id: &str, name: &str, folder: PathBuf) -> Installed {
+        Installed {
+            store: Store { name: store, id: id.into(), uri: Some(format!("{id}://run")), args: None },
+            name: name.into(),
+            folder,
+            exe: None,
+            steam_app_id: (store == StoreName::Steam).then(|| id.parse().unwrap()),
+        }
+    }
+
+    #[test]
+    fn store_games_join_at_once_and_leave_when_uninstalled() {
+        let t = Tmp::new("stores");
+        t.file("Games/Celeste/Celeste.exe", 1);
+        t.file("Steam/common/Hades/Hades.exe", 1);
+        t.file("Epic/Hades/x64/Hades.exe", 5);
+        let root = folders(&t.0.join("Games")).unwrap();
+        let hades = installed(StoreName::Steam, "1145360", "Hades", t.0.join(r"Steam\common\Hades"));
+        let epic = installed(StoreName::Epic, "Min", "Hades", t.0.join(r"Epic\Hades"));
+        // a quiet time of an hour: the files were just written, yet store games don't wait
+        let hour = Duration::from_secs(3600);
+        let p = pass(&[], &[], &root, &[hades.clone(), epic.clone()], SystemTime::now(), hour);
+        assert_eq!(p.joined, ["hades", "hades-2"], "two stores, two entries");
+        assert_eq!(p.waiting, [t.0.join(r"Games\Celeste")], "a folder still waits for its quiet time");
+        let steam = &p.games[0];
+        assert_eq!((steam.steam_app_id, steam.store.as_ref().map(|s| s.name)), (Some(1145360), Some(StoreName::Steam)));
+        assert_eq!(steam.exe, t.0.join(r"Steam\common\Hades\Hades.exe"), "no exe from the store: the folder's is picked");
+
+        // played, then uninstalled: it leaves (the journal keeps it), and comes back with its id and time
+        let mut known = p.games.clone();
+        known[0].playtime_sec = 600;
+        let gone = pass(&known, &[], &root, &[epic.clone()], SystemTime::now(), hour);
+        assert_eq!(gone.left.iter().map(|g| g.id.as_str()).collect::<Vec<_>>(), ["hades"]);
+        let moved = installed(StoreName::Steam, "1145360", "Hades", t.0.join(r"D\SteamLibrary\common\Hades"));
+        let back = pass(&gone.games, &gone.left, &root, &[moved, epic.clone()], SystemTime::now(), hour);
+        let h = back.games.iter().find(|g| g.store.as_ref().is_some_and(|s| s.name == StoreName::Steam)).unwrap();
+        assert_eq!((h.id.as_str(), h.playtime_sec), ("hades", 600), "the same Steam app, reinstalled elsewhere");
+    }
+
+    #[test]
+    fn a_kept_store_game_comes_back_to_itself_only() {
+        let t = Tmp::new("kept-stores");
+        t.file("XboxGames/Halo/Content/halo.exe", 1);
+        t.file("Steam/common/Hades/Hades.exe", 1);
+        t.file("Epic/Hades/Hades.exe", 1);
+        let gone = |id: &str, store: StoreName, sid: &str, folder: &str| Game {
+            id: id.into(),
+            name: id.into(),
+            folder: folder.into(),
+            store: Some(Store { name: store, id: sid.into(), uri: None, args: None }),
+            playtime_sec: 60,
+            ..Default::default()
+        };
+        // two removed Xbox games, both in a folder called Content, and a removed Steam Hades
+        let kept = [
+            gone("forza", StoreName::Xbox, "Forza_pub", r"D:\XboxGames\Forza\Content"),
+            gone("starfield", StoreName::Xbox, "Starfield_pub", r"D:\XboxGames\Starfield\Content"),
+            Game { name: "Hades".into(), steam_app_id: Some(1145360), ..gone("hades", StoreName::Steam, "1145360", r"Z:\Steam\common\Hades") },
+        ];
+        let halo = installed(StoreName::Xbox, "Halo_pub", "Halo", t.0.join(r"XboxGames\Halo\Content"));
+        let steam = installed(StoreName::Steam, "1145360", "Hades", t.0.join(r"Steam\common\Hades"));
+        let epic = installed(StoreName::Epic, "Min", "Hades", t.0.join(r"Epic\Hades"));
+        let p = pass(&[], &kept, &[], &[halo, steam, epic], SystemTime::now(), Duration::ZERO);
+        let by = |name: StoreName| p.games.iter().find(|g| g.store.as_ref().unwrap().name == name).unwrap();
+        assert_eq!((by(StoreName::Xbox).id.as_str(), by(StoreName::Xbox).playtime_sec), ("halo", 0), "no other Xbox game's journal");
+        assert_eq!((by(StoreName::Steam).id.as_str(), by(StoreName::Steam).playtime_sec), ("hades", 60), "the same Steam app");
+        assert_eq!(by(StoreName::Epic).id, "hades-2", "the kept Hades came back once");
+    }
+
+    #[test]
+    fn steam_corrects_a_name_search_match() {
+        let t = Tmp::new("steam-id");
+        t.file("common/Hades/Hades.exe", 1);
+        let root = folders(&t.0.join("common")).unwrap();
+        let mut known = pass(&[], &[], &root, &[], SystemTime::now(), Duration::ZERO).games;
+        // the name search matched Hades II
+        (known[0].steam_app_id, known[0].synced_at) = (Some(1145350), Some(1));
+        let hades = installed(StoreName::Steam, "1145360", "Hades", t.0.join(r"common\Hades"));
+        let p = pass(&known, &[], &root, &[hades], SystemTime::now(), Duration::ZERO);
+        assert_eq!((p.games[0].steam_app_id, p.games[0].synced_at), (Some(1145360), None), "Steam's app, fetched again");
+    }
+
+    #[test]
+    fn the_store_takes_a_games_folder_entry_over() {
+        let t = Tmp::new("takeover");
+        t.file("common/Hades/Hades.exe", 1);
+        t.file("common/Celeste/Celeste.exe", 1);
+        // the games folder is Steam's common folder
+        let root = folders(&t.0.join("common")).unwrap();
+        let first = pass(&[], &[], &root, &[], SystemTime::now(), Duration::ZERO);
+        assert_eq!(first.joined, ["celeste", "hades"]);
+        let hades = installed(StoreName::Steam, "1145360", "Hades", t.0.join(r"common\Hades"));
+        let p = pass(&first.games, &[], &root, &[hades], SystemTime::now(), Duration::ZERO);
+        assert!(p.joined.is_empty() && p.left.is_empty(), "the same entries");
+        assert_eq!(p.exe_changed, ["hades"]);
+        let h = p.games.iter().find(|g| g.id == "hades").unwrap();
+        assert_eq!(h.store.as_ref().map(|s| s.uri.as_deref()), Some(Some("1145360://run")), "it starts through Steam now");
+        // Steam turned off: the folder is a plain game again
+        let off = pass(&p.games, &[], &root, &[], SystemTime::now(), Duration::ZERO);
+        assert!(off.games.iter().all(|g| g.store.is_none()) && off.exe_changed == ["hades"]);
+
+        // a games-root folder that holds store games (D:\ as the games folder, D:\XboxGames inside) is the store's
+        t.file("XboxGames/Halo/Content/halo.exe", 1);
+        let root = folders(&t.0).unwrap();
+        let halo = installed(StoreName::Xbox, "Halo_pub", "Halo", t.0.join(r"XboxGames\Halo\Content"));
+        let p = pass(&[], &[], &root, &[halo], SystemTime::now(), Duration::ZERO);
+        assert_eq!(p.joined, ["common", "halo"], "XboxGames isn't a game of its own");
+    }
+
     #[test]
     fn a_restored_game_comes_back_by_folder_name() {
         let t = Tmp::new("restored");
@@ -342,7 +529,7 @@ mod tests {
             playtime_sec: 900,
             ..Default::default()
         }];
-        let p = pass(&[], &kept, &folders(&t.0).unwrap(), SystemTime::now(), Duration::ZERO);
+        let p = pass(&[], &kept, &folders(&t.0).unwrap(), &[], SystemTime::now(), Duration::ZERO);
         assert_eq!(p.joined, ["hollow-knight"]);
         assert_eq!((p.games[0].playtime_sec, p.games[0].restored_at), (900, None));
     }

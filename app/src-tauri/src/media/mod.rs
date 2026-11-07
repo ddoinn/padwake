@@ -146,7 +146,7 @@ async fn open<R: Runtime>(app: AppHandle<R>, id: String) -> Result<(), String> {
     let mut cmd = Command::new(edge); cmd.args(arguments(&profile, &entry.url));
     // The private profile prevents handoff to personal Edge. Only track the job: the profile isn't an
     // executable folder, and tracking Edge's install folder could close somebody's personal browser.
-    crate::games::start(&app, crate::games::Kind::Media, &id, &entry.name, cmd, None)
+    crate::games::start(&app, crate::games::Kind::Media, &id, &entry.name, crate::games::How::Run(cmd), None, None)
 }
 #[cfg(test)]
 mod tests {

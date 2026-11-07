@@ -1,6 +1,8 @@
 //! Game sessions (rows A1, A5): launch, track, Guide over a running game, back to it, Close Game, and playtime.
 //! One session at a time. `start` is the API Media (row A12) reuses for Edge app windows (`Kind::Media`).
-//! - Launch: the command runs in a job object (`session.rs`); the app sleeps (hidden, web view suspended) meanwhile.
+//! - Launch: a store game whose launcher starts it (Steam, Epic, Xbox) is opened by its link, and the session waits up
+//!   to `LAUNCHER_GRACE` for the game to start from its folder (an EA game's exe may hand itself to the EA app, so it
+//!   waits too). Any other game's command runs in a job object (`session.rs`); the app sleeps (hidden, web view suspended) meanwhile.
 //!   A game doesn't show the desktop while it loads: the app stays up on Home's navy launch screen until another window
 //!   fills the screen (`cover`), then sleeps.
 //! - Tracking is an OS wait on the job, then on processes run from the game's folder (launcher stubs). A foreground hook
@@ -34,6 +36,14 @@ use windows::Win32::UI::WindowsAndMessaging::{AllowSetForegroundWindow, ASFW_ANY
 
 /// Close Game asks first, then ends what is left after this long.
 pub const CLOSE_GRACE: Duration = Duration::from_secs(5);
+/// A launcher may update or sign in before it starts the game: the session waits this long for it.
+const LAUNCHER_GRACE: Duration = Duration::from_secs(120);
+
+/// How a session starts: a command we run, or a link Windows opens (a store launcher's).
+pub enum How {
+    Run(Command),
+    Open(String),
+}
 
 #[derive(Serialize, Clone, Copy, PartialEq, Debug)]
 #[serde(rename_all = "lowercase")]
@@ -134,16 +144,18 @@ fn log(line: &str) {
 
 // ---------- the session API (Media reuses it) ----------
 
-/// Starts a session: spawns `cmd` (this sets its creation flags) in a job, sleeps the app, and tracks it until no
-/// process of it remains; `folder` also counts processes run from that folder. Emits `game` events with `id` and `kind`.
-/// Errors if a session already runs.
+/// Starts a session: spawns the command (this sets its creation flags) in a job, or opens the link, sleeps the app, and
+/// tracks it until no process of it remains; `folder` also counts processes run from that folder (an opened link has
+/// only those). With `appear`, the session waits that long for something to run from the folder. Emits `game` events
+/// with `id` and `kind`. Errors if a session already runs.
 pub fn start<R: Runtime>(
     app: &AppHandle<R>,
     kind: Kind,
     id: &str,
     name: &str,
-    mut cmd: Command,
+    how: How,
     folder: Option<PathBuf>,
+    appear: Option<Duration>,
 ) -> Result<(), String> {
     let started = Instant::now();
     let tracked = {
@@ -152,7 +164,14 @@ pub fn start<R: Runtime>(
             return Err(format!("{} is already running", other.name));
         }
         emit(app, id, kind, "launching", None);
-        let tracked = match Tracked::spawn(&mut cmd, folder) {
+        let spawned = match how {
+            How::Run(mut cmd) => Tracked::spawn(&mut cmd, folder),
+            How::Open(uri) => folder.ok_or_else(|| "a link needs a folder to track".to_string()).and_then(|f| Tracked::open(&uri, f)),
+        };
+        let tracked = match spawned.map(|t| match appear {
+            Some(a) => t.with_appear(a),
+            None => t,
+        }) {
             Ok(t) => Arc::new(t),
             Err(e) => {
                 emit(app, id, kind, "exited", None);
@@ -422,6 +441,7 @@ fn came_to_front<R: Runtime>(app: &AppHandle<R>, hwnd: isize, pid: u32) {
             return;
         }
         l.ready = true;
+        l.tracked.mark_shown();
         (l.id.clone(), l.kind, l.name.clone(), l.front)
     };
     let (id, kind, name, front) = ready;
@@ -436,13 +456,31 @@ fn came_to_front<R: Runtime>(app: &AppHandle<R>, hwnd: isize, pid: u32) {
 
 // ---------- commands ----------
 
-/// Launches a library game: its exe, in its folder, tracked with that folder.
+/// Launches a library game: through its store's launcher, or its exe in its folder; tracked with that folder.
 #[tauri::command]
 async fn launch<R: Runtime>(app: AppHandle<R>, id: String) -> Result<(), String> {
     let game = crate::library::get(&id).ok_or_else(|| format!("no game {id}"))?;
+    let (how, appear) = how_to_start(&game)?;
+    start(&app, Kind::Game, &id, &game.name, how, Some(game.folder.clone()), appear)
+}
+
+/// The launcher's link (and the wait for the game), or the exe with the store's arguments.
+fn how_to_start(game: &crate::library::Game) -> Result<(How, Option<Duration>), String> {
+    use crate::library::stores::StoreName;
+    if let Some(uri) = game.store.as_ref().and_then(|s| s.uri.clone()) {
+        return Ok((How::Open(uri), Some(LAUNCHER_GRACE)));
+    }
+    if game.exe.as_os_str().is_empty() {
+        return Err(format!("{} has no program to start", game.name));
+    }
     let mut cmd = Command::new(&game.exe);
     cmd.current_dir(&game.folder);
-    start(&app, Kind::Game, &id, &game.name, cmd, Some(game.folder.clone()))
+    if let Some(args) = game.store.as_ref().and_then(|s| s.args.as_deref()) {
+        use std::os::windows::process::CommandExt;
+        cmd.raw_arg(args);
+    }
+    let ea = game.store.as_ref().is_some_and(|s| s.name == StoreName::Ea);
+    Ok((How::Run(cmd), ea.then_some(LAUNCHER_GRACE)))
 }
 
 /// Close Game: resolves once the game was asked and, if it stayed, ended (up to 5 s). `game` "exited" follows.
@@ -489,4 +527,41 @@ async fn backdrop(size: Option<String>) -> Result<tauri::ipc::Response, String> 
     let small = size.as_deref() == Some("small");
     let still = tauri::async_runtime::spawn_blocking(move || backdrop::still(small)).await.map_err(|e| e.to_string())?;
     still.map(tauri::ipc::Response::new).ok_or_else(|| "no still".into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::library::stores::{Store, StoreName};
+    use crate::library::Game;
+    use std::path::Path;
+
+    fn game(store: Option<Store>) -> Game {
+        Game { name: "G".into(), folder: r"C:\G".into(), exe: r"C:\G\g.exe".into(), store, ..Default::default() }
+    }
+
+    fn store(name: StoreName, uri: Option<&str>, args: Option<&str>) -> Option<Store> {
+        Some(Store { name, id: "1".into(), uri: uri.map(String::from), args: args.map(String::from) })
+    }
+
+    #[test]
+    fn each_store_game_starts_its_own_way() {
+        // through the launcher's link, waiting for it to start the game
+        let (how, appear) = how_to_start(&game(store(StoreName::Steam, Some("steam://rungameid/1"), None))).unwrap();
+        assert!(matches!(how, How::Open(ref u) if u == "steam://rungameid/1"));
+        assert_eq!(appear, Some(LAUNCHER_GRACE));
+        // GOG: the exe with its play task's arguments, in the game's folder; no wait
+        let (how, appear) = how_to_start(&game(store(StoreName::Gog, None, Some("-skipintro")))).unwrap();
+        let How::Run(cmd) = how else { panic!("GOG runs its exe") };
+        assert_eq!((cmd.get_program(), cmd.get_current_dir()), (std::ffi::OsStr::new(r"C:\G\g.exe"), Some(Path::new(r"C:\G"))));
+        assert_eq!(cmd.get_args().collect::<Vec<_>>(), ["-skipintro"]);
+        assert_eq!(appear, None);
+        // EA: the exe, which may hand itself to the EA app, so the session waits
+        let (how, appear) = how_to_start(&game(store(StoreName::Ea, None, None))).unwrap();
+        assert!(matches!(how, How::Run(_)) && appear == Some(LAUNCHER_GRACE));
+        // a folder game: the exe, as before
+        let (how, appear) = how_to_start(&game(None)).unwrap();
+        assert!(matches!(how, How::Run(ref c) if c.get_args().count() == 0) && appear.is_none());
+        assert!(how_to_start(&Game { exe: PathBuf::new(), ..game(None) }).is_err(), "nothing to start");
+    }
 }

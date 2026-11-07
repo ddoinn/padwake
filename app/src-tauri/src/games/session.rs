@@ -2,6 +2,10 @@
 //! tracked folder (launcher stubs that relaunch the game outside the job).
 //! - Tracking is an OS wait: the job's completion port reports "no active processes". Then the folder is checked
 //!   once for processes from it, and those are waited on in turn. The session ends when none remain.
+//! - A store game may start through its launcher (`open`: a URI, no child of ours) or hand itself to it (the EA app),
+//!   so for a while nothing of the game may run: with `appear` set, an empty folder ends the session only once a process
+//!   from it was seen, the game's window came to the front (`shown`), Close Game was pressed, or `appear` passed. That
+//!   wait looks at the folder once a second; the launcher has no handle to wait on.
 //! - Closing asks first (WM_CLOSE to the session's top-level windows, like their X button), waits, then ends only
 //!   processes in the job or whose image is under the folder.
 
@@ -9,7 +13,8 @@ use std::os::windows::io::AsRawHandle;
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::Duration;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant};
 use windows::core::{BOOL, PCWSTR, PWSTR};
 use windows::Win32::Foundation::{CloseHandle, HANDLE, HWND, INVALID_HANDLE_VALUE, LPARAM, WAIT_TIMEOUT, WPARAM};
 use windows::Win32::System::Diagnostics::ToolHelp::{
@@ -61,13 +66,23 @@ impl Drop for Owned {
 pub struct Tracked {
     job: Owned,
     port: Owned,
-    /// false if Windows refused to put the child in the job (then the child's own handle is waited on)
+    /// false if Windows refused to put the child in the job (then the child's own handle is waited on), or there is
+    /// no child (`open`)
     in_job: bool,
-    /// the spawned child; keeping its handle open keeps its pid from being reused
-    child: Owned,
+    /// the spawned child; keeping its handle open keeps its pid from being reused. `None` after `open`.
+    child: Option<Owned>,
+    /// 0 without a child
     pub pid: u32,
     pub folder: Option<PathBuf>,
+    started: Instant,
+    /// how long a launcher may take to start the game (see the module notes)
+    appear: Option<Duration>,
+    shown: AtomicBool,
+    closed: AtomicBool,
 }
+
+/// How often the launch wait looks at the folder.
+const APPEAR_POLL: Duration = Duration::from_secs(1);
 
 impl Tracked {
     /// Spawns `cmd` suspended, puts it in a new job and lets it run. Its children join the job by themselves; a child
@@ -100,25 +115,87 @@ impl Tracked {
             let own = OpenProcess(PROCESS_SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
                 .map_err(|e| format!("opening {pid}: {e}"))?;
             drop(child);
-            Ok(Tracked { job, port, in_job, child: Owned::new(own), pid, folder })
+            Ok(Tracked::new(job, port, in_job, Some(Owned::new(own)), pid, folder))
         }
+    }
+
+    /// Asks Windows to open `uri` (a store launcher's link) and tracks the processes run from `folder`, which the
+    /// launcher starts. Nothing of ours runs, so `appear` should be set: until then nothing runs from the folder.
+    pub fn open(uri: &str, folder: PathBuf) -> Result<Tracked, String> {
+        use windows::core::HSTRING;
+        use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE};
+        use windows::Win32::UI::Shell::ShellExecuteW;
+        use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+        if !trackable(&folder) {
+            return Err(format!("{} can't be tracked", folder.display()));
+        }
+        let job = Owned::new(unsafe { CreateJobObjectW(None, PCWSTR::null()) }.map_err(|e| format!("job: {e}"))?);
+        let port = Owned::new(unsafe { CreateIoCompletionPort(INVALID_HANDLE_VALUE, None, 0, 1) }.map_err(|e| format!("port: {e}"))?);
+        // on a thread of its own with COM set up, as ShellExecute wants for shell: links and protocol handlers
+        let target = uri.to_string();
+        let r = std::thread::spawn(move || unsafe {
+            let com = CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+            let r = ShellExecuteW(None, &HSTRING::from("open"), &HSTRING::from(target), PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL);
+            if com.is_ok() {
+                CoUninitialize();
+            }
+            r.0 as isize
+        })
+        .join()
+        .map_err(|_| format!("opening {uri}: the thread failed"))?;
+        // above 32 means it worked
+        if r <= 32 {
+            return Err(format!("opening {uri}: error {r}"));
+        }
+        Ok(Tracked::new(job, port, false, None, 0, Some(folder)))
+    }
+
+    fn new(job: Owned, port: Owned, in_job: bool, child: Option<Owned>, pid: u32, folder: Option<PathBuf>) -> Tracked {
+        let (shown, closed) = (AtomicBool::new(false), AtomicBool::new(false));
+        Tracked { job, port, in_job, child, pid, folder, started: Instant::now(), appear: None, shown, closed }
+    }
+
+    /// Waits up to `limit` from the start for a launcher to start the game (see the module notes).
+    pub fn with_appear(mut self, limit: Duration) -> Tracked {
+        self.appear = Some(limit);
+        self
+    }
+
+    /// The session's window came to the front: the game is up.
+    pub fn mark_shown(&self) {
+        self.shown.store(true, Ordering::Relaxed);
+    }
+
+    /// Still waiting for a launcher to start the game: nothing from the folder seen yet, no window, not closed, and
+    /// within `appear`.
+    fn launching(&self, seen: bool) -> bool {
+        !seen
+            && !self.shown.load(Ordering::Relaxed)
+            && !self.closed.load(Ordering::Relaxed)
+            && self.appear.is_some_and(|a| self.started.elapsed() < a)
     }
 
     /// Blocks until the session is over: the job is empty (or, outside a job, the child has exited) and no process runs
     /// from the folder. An OS wait throughout.
     pub fn wait(&self) {
+        let mut seen = false;
         loop {
             if self.in_job {
                 self.wait_job_empty();
-            } else {
-                unsafe { WaitForSingleObject(self.child.get(), INFINITE) };
+            } else if let Some(child) = &self.child {
+                unsafe { WaitForSingleObject(child.get(), INFINITE) };
             }
             let Some(folder) = &self.folder else { return };
             // a launcher stub may have started the game outside the job and exited: wait for those too
             let left = processes_under(folder);
             if left.is_empty() {
+                if self.launching(seen) {
+                    std::thread::sleep(APPEAR_POLL);
+                    continue;
+                }
                 return;
             }
+            seen = true;
             let handles: Vec<Owned> = left
                 .iter()
                 .filter_map(|p| unsafe { OpenProcess(PROCESS_SYNCHRONIZE, false, p.pid) }.ok().map(Owned::new))
@@ -165,7 +242,8 @@ impl Tracked {
     /// The pids in the job now.
     pub fn job_pids(&self) -> Vec<u32> {
         if !self.in_job {
-            return if unsafe { WaitForSingleObject(self.child.get(), 0) } == WAIT_TIMEOUT { vec![self.pid] } else { vec![] };
+            let alive = self.child.as_ref().is_some_and(|c| unsafe { WaitForSingleObject(c.get(), 0) } == WAIT_TIMEOUT);
+            return if alive { vec![self.pid] } else { vec![] };
         }
         // a header of two u32s, then one usize per pid
         let mut buf = vec![0usize; 1026];
@@ -207,7 +285,7 @@ impl Tracked {
             if unsafe { IsProcessInJob(h.get(), Some(self.job.get()), &mut inside) }.is_ok() && inside.as_bool() {
                 return true;
             }
-        } else if pid == self.pid {
+        } else if self.child.is_some() && pid == self.pid {
             return true;
         }
         match (&self.folder, image_of(h.get())) {
@@ -219,6 +297,8 @@ impl Tracked {
     /// Closes the session like its windows' X buttons: WM_CLOSE to every visible top-level window it owns, then up to
     /// `grace` for its processes to exit, then ends what is left (the job, and processes run from the folder).
     pub fn close(&self, grace: Duration) -> Closed {
+        // a launcher still starting the game: stop waiting for it
+        self.closed.store(true, Ordering::Relaxed);
         let pids = self.pids();
         let windows = top_windows(&pids);
         for w in &windows {
@@ -240,7 +320,7 @@ impl Tracked {
                 unsafe {
                     let _ = TerminateJobObject(self.job.get(), 1);
                 }
-            } else if unsafe { WaitForSingleObject(self.child.get(), 0) } == WAIT_TIMEOUT {
+            } else if self.child.as_ref().is_some_and(|c| unsafe { WaitForSingleObject(c.get(), 0) } == WAIT_TIMEOUT) {
                 if let Ok(h) = unsafe { OpenProcess(PROCESS_TERMINATE, false, self.pid) } {
                     let h = Owned::new(h);
                     if unsafe { TerminateProcess(h.get(), 1) }.is_ok() {
@@ -552,6 +632,88 @@ mod tests {
         let ended = waiter.join().unwrap();
         println!("session ended after {ended:?}");
         assert!(ended >= Duration::from_secs(3));
+    }
+
+    #[test]
+    fn a_launcher_gets_time_to_start_the_game() {
+        let dir = scratch("appear", &["cmd.exe", "PING.EXE"]);
+        // the exe hands over and exits (as an EA game's may); the "launcher" starts the game 1.5 s later
+        let t0 = Instant::now();
+        let t = std::sync::Arc::new(
+            Tracked::spawn(Command::new(dir.join("cmd.exe")).args(["/c", "exit"]), Some(dir.clone())).unwrap().with_appear(Duration::from_secs(10)),
+        );
+        let waiter = {
+            let t = t.clone();
+            std::thread::spawn(move || {
+                t.wait();
+                t0.elapsed()
+            })
+        };
+        std::thread::sleep(Duration::from_millis(1500));
+        assert!(!waiter.is_finished(), "nothing ran from the folder yet: still launching");
+        let mut game = ping(&dir.join("PING.EXE"), 2).stdout(Stdio::null()).spawn().unwrap();
+        let took = waiter.join().unwrap();
+        let _ = game.wait();
+        assert!(took >= Duration::from_millis(3200) && took < Duration::from_secs(8), "ended with the game, not at the grace: {took:?}");
+
+        // nothing ever starts: the session ends once the grace is over
+        let t0 = Instant::now();
+        let t = Tracked::spawn(Command::new(dir.join("cmd.exe")).args(["/c", "exit"]), Some(dir.clone())).unwrap().with_appear(Duration::from_secs(2));
+        t.wait();
+        let took = t0.elapsed();
+        assert!(took >= Duration::from_secs(2) && took < Duration::from_secs(5), "{took:?}");
+
+        // the game's window came up (it ran and quit): no waiting for another start
+        let t0 = Instant::now();
+        let t = Tracked::spawn(Command::new(dir.join("cmd.exe")).args(["/c", "exit"]), Some(dir.clone())).unwrap().with_appear(Duration::from_secs(30));
+        t.mark_shown();
+        t.wait();
+        assert!(t0.elapsed() < Duration::from_secs(2));
+
+        // Close Game while the launcher is still starting it
+        let t0 = Instant::now();
+        let t = std::sync::Arc::new(
+            Tracked::spawn(Command::new(dir.join("cmd.exe")).args(["/c", "exit"]), Some(dir.clone())).unwrap().with_appear(Duration::from_secs(30)),
+        );
+        let waiter = {
+            let t = t.clone();
+            std::thread::spawn(move || t.wait())
+        };
+        std::thread::sleep(Duration::from_millis(500));
+        let closed = t.close(Duration::from_millis(100));
+        assert!(closed.ended.is_empty(), "nothing to end: {closed:?}");
+        waiter.join().unwrap();
+        assert!(t0.elapsed() < Duration::from_secs(3), "the wait stopped: {:?}", t0.elapsed());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// `open` hands a link to Windows, as for `steam://…`; here the link is an exe in the folder, which waits for a key.
+    #[test]
+    #[ignore = "real windows: opens a console window (choice.exe) for about 2 s"]
+    fn an_opened_link_is_tracked_by_its_folder() {
+        let dir = scratch("open", &["choice.exe"]);
+        let t0 = Instant::now();
+        let t = std::sync::Arc::new(Tracked::open(&dir.join("choice.exe").display().to_string(), dir.clone()).unwrap().with_appear(Duration::from_secs(30)));
+        assert_eq!((t.pid, t.job_pids()), (0, vec![]), "no child of ours");
+        let waiter = {
+            let t = t.clone();
+            std::thread::spawn(move || {
+                t.wait();
+                t0.elapsed()
+            })
+        };
+        std::thread::sleep(Duration::from_millis(1500));
+        let pids = t.pids();
+        println!("after 1.5 s: {pids:?}");
+        assert_eq!(pids.len(), 1, "the program Windows started, from the folder");
+        assert!(t.contains(pids[0]) && !waiter.is_finished());
+        let closed = t.close(Duration::from_millis(300));
+        println!("{closed:?}");
+        assert_eq!(closed.ended, pids);
+        let took = waiter.join().unwrap();
+        assert!(took < Duration::from_secs(5), "{took:?}");
+        assert!(Tracked::open("x://y", PathBuf::from(r"C:\")).is_err(), "a drive root is never tracked");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

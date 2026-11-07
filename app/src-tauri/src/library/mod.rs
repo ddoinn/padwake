@@ -4,6 +4,10 @@
 //!   kept for when its folder comes back.
 //! - The journal (Library → Journal): every played or reviewed game, with its time, sessions and the player's rating,
 //!   status and note. A removed folder's entry stays, with its art (trailer, music and screenshots go).
+//! - Games installed with Steam, Epic Games, GOG, Xbox (Game Pass) or the EA app join too (`stores.rs`), at once and
+//!   whatever folder they are in, and leave when their launcher no longer lists them. `settings.storesOff` lists the
+//!   stores not to import ("steam", "epic", "gog", "xbox", "ea"). Steam, Epic and Xbox games start through their
+//!   launcher.
 //! - Each game is enriched once (`steam.rs`): Steam store info, SteamGridDB art, news, trailer and music.
 //! - Achievements are read from the game's files (`progress.rs`), and the main story's usual length comes from
 //!   HowLongToBeat; after each session and once per start, for games in the journal. Nobody types these in.
@@ -22,6 +26,7 @@ pub mod portable;
 mod progress;
 mod scan;
 mod steam;
+pub mod stores;
 mod trailer;
 
 use serde::{Deserialize, Serialize};
@@ -43,6 +48,8 @@ pub struct Game {
     pub name: String,
     pub folder: PathBuf,
     pub exe: PathBuf,
+    /// a game installed with a store's launcher, and how it starts; `None`: a folder in the games folder, started by `exe`
+    pub store: Option<stores::Store>,
     pub art: Art,
     pub tagline: Option<String>,
     /// plain text, paragraphs separated by a blank line
@@ -659,8 +666,8 @@ fn quiet() -> Duration {
 
 #[derive(Default)]
 struct Watch {
-    /// the folders at the last full pass
-    seen: Option<Vec<PathBuf>>,
+    /// the folders and store games at the last full pass
+    seen: Option<(Vec<PathBuf>, Vec<stores::Installed>)>,
     /// a new folder is still being written: pass again next tick
     waiting: bool,
     /// logged "skipped" for the game that is running now
@@ -690,25 +697,38 @@ fn tick(w: &mut Watch, root: &Path, running: &dyn Fn() -> bool) -> Tick {
         return Tick::Skipped;
     }
     w.skipping = false;
-    let Some(folders) = scan::folders(root) else {
-        if !w.root_missing {
-            log(&format!("games folder {} can't be read; the library stays as it is", root.display()));
-            w.root_missing = true;
-        }
-        return Tick::Idle;
-    };
-    w.root_missing = false;
-    if w.seen.as_ref() == Some(&folders) && !w.waiting {
-        // nothing new on disk; finish enrichment a running game paused
-        enrich_new(w, running);
-        return Tick::Idle;
-    }
+    let found = stores::installed(&crate::data::setting::<Vec<String>>("storesOff").unwrap_or_default());
     let (known, kept) = {
         let s = state();
         (s.games.clone(), s.kept.clone())
     };
-    let p = scan::pass(&known, &kept, &folders, SystemTime::now(), quiet());
+    let folders = match scan::folders(root) {
+        Some(f) => {
+            w.root_missing = false;
+            f
+        }
+        None => {
+            if !w.root_missing {
+                log(&format!("games folder {} can't be read; its games stay as they are", root.display()));
+                w.root_missing = true;
+            }
+            // the store games still come and go (the last one too); the folder games stay
+            known.iter().filter(|g| g.store.is_none()).map(|g| g.folder.clone()).collect()
+        }
+    };
+    let seen = (folders, found);
+    if w.seen.as_ref() == Some(&seen) && !w.waiting {
+        // nothing new on disk; finish enrichment a running game paused
+        enrich_new(w, running);
+        return Tick::Idle;
+    }
+    let (folders, found) = &seen;
+    let p = scan::pass(&known, &kept, folders, found, SystemTime::now(), quiet());
     apply(&p);
+    // a store took a game over (a Steam app id may have changed its match): enrichment may try it again
+    for id in &p.exe_changed {
+        w.tried.remove(id);
+    }
     for f in &p.no_exe {
         if w.no_exe.insert(f.clone()) {
             log(&format!("no game exe in {}", f.display()));
@@ -718,7 +738,7 @@ fn tick(w: &mut Watch, root: &Path, running: &dyn Fn() -> bool) -> Tick {
         let names: Vec<_> = p.waiting.iter().filter_map(|f| f.file_name()).map(|n| n.to_string_lossy()).collect();
         log(&format!("waiting for {} to be quiet for {} s", names.join(", "), quiet().as_secs()));
     }
-    w.seen = Some(folders);
+    w.seen = Some(seen);
     w.waiting = !p.waiting.is_empty();
     enrich_new(w, running);
     Tick::Passed
@@ -733,7 +753,15 @@ fn apply(p: &scan::Pass) {
     let mut games = Vec::with_capacity(p.games.len());
     for g in &p.games {
         match s.games.iter().find(|c| c.id == g.id) {
-            Some(cur) => games.push(Game { exe: g.exe.clone(), ..cur.clone() }),
+            // what the pass changed: the exe, and a store's take-over (its launch, and the Steam app it named)
+            Some(cur) if p.exe_changed.contains(&g.id) => games.push(Game {
+                exe: g.exe.clone(),
+                store: g.store.clone(),
+                steam_app_id: g.steam_app_id,
+                synced_at: if g.steam_app_id != cur.steam_app_id { None } else { cur.synced_at },
+                ..cur.clone()
+            }),
+            Some(cur) => games.push(cur.clone()),
             None => games.push(g.clone()),
         }
     }
@@ -751,7 +779,10 @@ fn apply(p: &scan::Pass) {
     }
     for id in &p.joined {
         if let Some(g) = games.iter().find(|g| &g.id == id) {
-            log(&format!("joined: {} -> {}", g.id, g.exe.display()));
+            match &g.store {
+                Some(st) => log(&format!("joined: {} from {:?} ({}) -> {}", g.id, st.name, st.id, g.folder.display())),
+                None => log(&format!("joined: {} -> {}", g.id, g.exe.display())),
+            }
         }
     }
     for id in &p.exe_changed {
@@ -863,7 +894,7 @@ fn enrich_one(id: &str, http: &Http, ffmpeg: Option<&Path>) -> Result<String, St
 fn summary(g: &Game) -> String {
     let has = |p: &Option<PathBuf>, name: &str| if p.is_some() { name.to_string() } else { format!("-{name}") };
     format!(
-        "{} \"{}\" steam {}: {} {} {} {} shots {} {} {} news {} tagline {}",
+        "{} \"{}\" steam {}: {} {} {} {} shots {} {} {} news {} tagline {}{}",
         g.id,
         g.name,
         g.steam_app_id.map_or("-".into(), |i| i.to_string()),
@@ -876,6 +907,7 @@ fn summary(g: &Game) -> String {
         has(&g.music, "music"),
         g.news.len(),
         if g.tagline.is_some() { "yes" } else { "no" },
+        g.store.as_ref().map_or(String::new(), |s| format!(" store {}", s.name.key())),
     )
 }
 
@@ -938,7 +970,8 @@ pub fn cli(args: &[String]) -> Option<i32> {
     }
     let t0 = Instant::now();
     let mut w = Watch::default();
-    if tick(&mut w, &root, &|| false) == Tick::Idle {
+    tick(&mut w, &root, &|| false);
+    if w.root_missing {
         eprintln!("games folder {} can't be read", root.display());
         return Some(1);
     }

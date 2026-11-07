@@ -25,7 +25,7 @@
 import { runDistance, runSpeed } from '../input/input.js';
 import { warmControlCenter } from '../control-center/notices.js'; // Control Center's notifications and toasts, kept from boot
 import { toast } from '../control-center/toast.js';
-import { sorted, SORTS } from '../library/library.js'; // the preview shows the Library's first rows in its order
+import { sorted, SORTS, STORES } from '../library/library.js'; // the preview shows the Library's first rows in its order
 import { avatarHtml } from '../users/avatars.js';
 import * as users from '../users/store.js';
 
@@ -1456,6 +1456,7 @@ function showInfo(g) {
     ['Playtime', g.playtimeSec ? playtime(g.playtimeSec).replace(' played', '') : 'Not played yet'],
     ['Last played', g.lastPlayed ? capital(ago(g.lastPlayed)) : '—'],
     ['Added', g.addedAt ? capital(ago(g.addedAt)) : '—'],
+    ...(g.store ? [['Store', STORES.find(([k]) => k === g.store.name)?.[1] ?? g.store.name]] : []),
     ['Folder', g.folder ?? '—'],
     ['Program', g.exe ? String(g.exe).split(/[\\/]/).pop() : '—'],
   ];
