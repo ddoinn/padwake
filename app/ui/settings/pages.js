@@ -9,6 +9,7 @@ import { padTest } from './controller-test.js';
 export { padTest } from './controller-test.js';
 import { savedData, softwareCategory } from './cloud.js';
 import { usersPage } from './users.js';
+import { STORES } from '../library/library.js';
 import { isCloudPc, END_LABEL, END_TITLE, END_STEPS } from '../cloud-pc.js';
 
 export const root = () => ({
@@ -128,14 +129,21 @@ export function controllers(ctx) {
   };
 }
 
-// ---------- Library: games folder, check now, refresh art ----------
+// ---------- Library: games folder, check now, refresh art; which stores' games join ----------
 export function library(ctx) {
-  const s = { settings: {}, refreshing: null, checked: null };
+  const s = { settings: {}, games: [], refreshing: null, checked: null };
+  const off = () => s.settings.storesOff ?? [];
+  const count = key => s.games.filter(g => g.store?.name === key).length;
   return {
     title: 'Library',
     layout: 'two',
-    load: async () => { s.settings = await ctx.host.settings.get(); },
-    events: { settings: v => { s.settings = v; ctx.update(); } },
+    load: async () => {
+      [s.settings, s.games] = await Promise.all([ctx.host.settings.get(), ctx.host.library.list().catch(() => [])]);
+    },
+    events: {
+      settings: v => { s.settings = v; ctx.update(); },
+      library: v => { s.games = v; ctx.update(); },
+    },
     cats: [
       {
         label: 'Games',
@@ -179,6 +187,23 @@ export function library(ctx) {
             },
           },
         ],
+      },
+      {
+        label: 'Stores',
+        rows: () => STORES.map(([key, label]) => ({
+          kind: 'toggle', label,
+          desc: () => {
+            if (off().includes(key)) return `Games installed with ${label} stay out of your library.`;
+            const n = count(key);
+            return n ? `${n} game${n === 1 ? '' : 's'} installed with ${label}.` : `Games you install with ${label} join your library.`;
+          },
+          get: () => !off().includes(key),
+          set: async v => {
+            const storesOff = v ? off().filter(k => k !== key) : [...off(), key];
+            s.settings = await ctx.host.settings.set({ storesOff });
+            ctx.host.library.rescan().catch(() => {});
+          },
+        })),
       },
     ],
   };
