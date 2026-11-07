@@ -25,6 +25,7 @@ mod hltb;
 pub mod portable;
 mod progress;
 mod scan;
+pub mod sessions;
 mod steam;
 pub mod stores;
 mod trailer;
@@ -290,14 +291,21 @@ fn rescan() -> Vec<Game> {
 }
 
 /// Row A5: a session of `secs` ended at `ended_at` (Unix ms). Adds it to the game's playtime and sessions, sets
-/// `lastPlayed` (and `firstPlayed` the first time) and sends the list. False if there is no such game.
+/// `lastPlayed` (and `firstPlayed` the first time), adds a line to the user's session log (row B1) and sends the
+/// list. False if there is no such game.
 pub fn record_session(id: &str, secs: u64, ended_at: u64) -> bool {
     let mut s = state();
     let Some(g) = s.games.iter_mut().find(|g| g.id == id) else { return false };
+    let session = sessions::Session::ended(id, secs, ended_at);
     g.playtime_sec += secs;
     g.last_played = Some(ended_at);
     g.sessions += 1;
-    g.first_played.get_or_insert(ended_at.saturating_sub(secs * 1000));
+    g.first_played.get_or_insert(session.start);
+    if !s.user.is_empty() {
+        if let Err(e) = sessions::append(&sessions::file(&s.user), &session) {
+            log(&format!("{}'s session log: {e}", s.user));
+        }
+    }
     changed(&s);
     drop(s);
     // not in unit tests: it may go to the network
@@ -487,11 +495,27 @@ pub fn backup_entries() -> Vec<portable::Entry> {
     portable::export(&s.games, &kept)
 }
 
-/// Merges a backup into the library and the journal; saves and sends the list if anything changed.
-pub fn restore(entries: &[portable::Entry]) -> portable::Restored {
+/// The current user's session log, for the backup.
+pub fn backup_sessions() -> Vec<sessions::Session> {
+    let user = state().user.clone();
+    if user.is_empty() {
+        return Vec::new();
+    }
+    sessions::read(&sessions::file(&user))
+}
+
+/// Merges a backup into the library, the journal and the session log; saves and sends the list if anything changed.
+pub fn restore(backup: &portable::Backup) -> portable::Restored {
     let mut guard = state();
     let s = &mut *guard;
-    let r = portable::merge(&mut s.games, &mut s.kept, entries, scan::ms(SystemTime::now()));
+    let r = portable::merge(&mut s.games, &mut s.kept, &backup.games, scan::ms(SystemTime::now()));
+    if !s.user.is_empty() {
+        match sessions::absorb(&sessions::file(&s.user), &backup.sessions) {
+            Ok(0) => {}
+            Ok(n) => log(&format!("restored from backup: {n} sessions joined the log")),
+            Err(e) => log(&format!("restoring {}'s session log: {e}", s.user)),
+        }
+    }
     if r != portable::Restored::default() {
         changed(s);
         log(&format!("restored from backup: {} updated, {} added to the journal", r.updated, r.added));
@@ -1021,19 +1045,32 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    /// Also row B1: each session is a line in the log of whoever played it. The only test that sets a user.
     #[test]
-    fn sessions_add_playtime() {
+    fn sessions_add_playtime_and_go_to_the_players_log() {
+        let (asha, riya) = (format!("b1-asha-{}", std::process::id()), format!("b1-riya-{}", std::process::id()));
+        let clean = || [&asha, &riya].iter().for_each(|u| drop(std::fs::remove_dir_all(crate::users::dir_of(u))));
+        clean();
         state().games.push(Game { id: "session-test".into(), playtime_sec: 60, ..Default::default() });
+        state().user = asha.clone();
         assert!(record_session("session-test", 90, 1_793_196_309_000));
         let g = get("session-test").unwrap();
         assert_eq!((g.playtime_sec, g.last_played), (150, Some(1_793_196_309_000)));
         // the first session recorded: it started 90 s before it ended
         assert_eq!((g.sessions, g.first_played), (1, Some(1_793_196_219_000)));
+        state().user = riya.clone();
         assert!(record_session("session-test", 30, 1_793_200_000_000));
         let g = get("session-test").unwrap();
         assert_eq!((g.sessions, g.first_played, g.playtime_sec), (2, Some(1_793_196_219_000), 180));
         assert!(!record_session("no-such-game", 90, 0));
+        state().user.clear();
         state().games.retain(|g| g.id != "session-test");
+
+        let first = sessions::Session::ended("session-test", 90, 1_793_196_309_000);
+        assert_eq!(sessions::read(&sessions::file(&asha)), [first]);
+        let second = sessions::Session::ended("session-test", 30, 1_793_200_000_000);
+        assert_eq!(sessions::read(&sessions::file(&riya)), [second], "Riya's session is in her own log only");
+        clean();
     }
 
     #[test]

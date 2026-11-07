@@ -48,6 +48,20 @@ the row when it's done. B1 is worth a release of its own, so the log starts coll
   read back), backup merge doesn't double or drop sessions, and a second user's session lands in their own file.
 - **Owns:** `app/src-tauri/src/library/mod.rs` (record_session), a new `app/src-tauri/src/library/sessions.rs`,
   `app/src-tauri/src/library/portable.rs`.
+- **Done (2026-11-07), measured:**
+  - On the Avita, a debug build with its own data dir and `Hades` from `W:\games-test` (the 5 s stand-in), played
+    twice from Home with the test pad, left two lines in `users\<id>\sessions.jsonl`:
+    `{"game":"hades","start":1794076117762,"end":1794076122762,"secs":5}` and
+    `{"game":"hades","start":1794076151552,"end":1794076156552,"secs":5}`. `play.json` went from 0 to 5 to 10 s and
+    2 sessions; its `firstPlayed` is the first line's start and its `lastPlayed` the second line's end.
+  - Unit tests: `appends_survive_a_crash_mid_write`, `a_backup_merge_never_doubles_or_drops_sessions`,
+    `sessions_add_playtime_and_go_to_the_players_log` (second user, own file), `a_backup_from_before_the_session_log_reads_with_none`.
+    `cargo test --lib --locked`: 95 passed, 12 ignored.
+  - Also touched, outside the owned files: `app/src-tauri/src/cloud/backup.rs` builds the gist, so it now hashes,
+    uploads and restores the log too (merged with what the gist holds, like the games).
+  - For B4: sessions keep the game id they were played under. A game whose id differs between two PCs shows as two
+    ids in a merged log; match by `portable.rs`'s rules if that ever matters. A PC still on 0.3.4 that uploads drops
+    the log from the gist, but the next upload from a PC with B1 puts it back (its own log is merged in).
 
 ### Row B2: Display settings per game (shared)
 - **Outcome:**

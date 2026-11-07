@@ -6,13 +6,14 @@
 //! - After sign-in the app looks for the gist ("Padwake backup"). If it holds games, the page offers a restore.
 //! - Each library change (a session ends, a review) marks the backup due; 2 min after the last change, when no game
 //!   runs, the gist is updated (setting `backupAuto`, on by default). Unchanged content isn't sent again. What is sent
-//!   keeps the other PC's games and time (`portable::combine`), so declining a restore loses nothing.
+//!   keeps the other PC's games, time and sessions (`portable::combine`, `sessions::merge`), so declining a restore
+//!   loses nothing. The user's session log (row B1) goes with it.
 //! - State: `backup.json` (login, gist id, last save and its content hash). Events: `backup` with the status.
 //! - Each user (`users/mod.rs`) backs up to their own GitHub account: `backup.json` and `github.token` are in the
 //!   user's folder, and the status is the current user's. A switch waits for an upload under way and stops a sign-in.
 
 use super::github::{self, Http, Poll};
-use crate::library::portable::{self, Backup, Entry, Restored};
+use crate::library::portable::{self, Backup, Entry, Restored, Session};
 use crate::system::log;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -235,7 +236,8 @@ pub fn save<R: Runtime>(app: &AppHandle<R>) -> Result<Status, String> {
     let _one = BUSY.lock().unwrap_or_else(|e| e.into_inner());
     let token = token().ok_or("Sign in to GitHub first.")?;
     let local = crate::library::backup_entries();
-    let hash = super::crypto::sha256_hex(&serde_json::to_vec(&local).map_err(|e| e.to_string())?)?;
+    let sessions = crate::library::backup_sessions();
+    let hash = super::crypto::sha256_hex(&serde_json::to_vec(&(&local, &sessions)).map_err(|e| e.to_string())?)?;
     let saved = live().saved.clone();
     if saved.gist_id.is_some() && saved.hash.as_deref() == Some(hash.as_str()) {
         return Ok(status());
@@ -244,7 +246,7 @@ pub fn save<R: Runtime>(app: &AppHandle<R>) -> Result<Status, String> {
         l.state = State::Saving;
         l.error = None;
     });
-    let result = upload(&token, saved.gist_id.clone(), local);
+    let result = upload(&token, saved.gist_id.clone(), local, sessions);
     match result {
         Ok((gist_id, at)) => {
             let saved = update(app, |l| {
@@ -261,8 +263,9 @@ pub fn save<R: Runtime>(app: &AppHandle<R>) -> Result<Status, String> {
     }
 }
 
-/// Sends `local` (combined with what is there) to the gist, creating it if needed. Returns the gist id and the time.
-fn upload(token: &str, gist_id: Option<String>, local: Vec<Entry>) -> Result<(String, u64), String> {
+/// Sends `local` and `sessions` (combined with what is there) to the gist, creating it if needed. Returns the gist id and
+/// the time.
+fn upload(token: &str, gist_id: Option<String>, local: Vec<Entry>, sessions: Vec<Session>) -> Result<(String, u64), String> {
     let http = Http::new();
     let mut id = match gist_id {
         Some(id) => Some(id),
@@ -270,13 +273,13 @@ fn upload(token: &str, gist_id: Option<String>, local: Vec<Entry>) -> Result<(St
     };
     let remote = match &id {
         Some(g) => match http.read_gist(token, g)? {
-            Some(text) => parse(&text).map(|b| b.games).unwrap_or_default(),
+            Some(text) => parse(&text).unwrap_or_default(),
             None => {
                 id = None; // deleted on GitHub: make a new one
-                Vec::new()
+                Backup::default()
             }
         },
-        None => Vec::new(),
+        None => Backup::default(),
     };
     let at = now_ms();
     let backup = Backup {
@@ -284,7 +287,8 @@ fn upload(token: &str, gist_id: Option<String>, local: Vec<Entry>) -> Result<(St
         format: portable::FORMAT,
         saved_at: at,
         machine: std::env::var("COMPUTERNAME").unwrap_or_default(),
-        games: portable::combine(local, &remote),
+        games: portable::combine(local, &remote.games),
+        sessions: crate::library::sessions::merge(&sessions, &remote.sessions),
     };
     let text = serde_json::to_string_pretty(&backup).map_err(|e| e.to_string())?;
     if let Some(g) = &id {
@@ -453,7 +457,7 @@ pub fn restore<R: Runtime>(app: &AppHandle<R>) -> Result<Status, String> {
             None => http.find_gist(&token)?.ok_or("There's no backup on this GitHub account yet.")?,
         };
         let text = http.read_gist(&token, &id)?.ok_or("The backup gist was deleted on GitHub.")?;
-        Ok::<_, String>((id, crate::library::restore(&parse(&text)?.games)))
+        Ok::<_, String>((id, crate::library::restore(&parse(&text)?)))
     })();
     match result {
         Ok((id, r)) => Ok(update(app, |l| {
