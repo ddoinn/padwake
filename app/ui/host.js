@@ -11,6 +11,7 @@
 //                                          'app' if Home already showed over it, else 'game')}
 //                                 mouse    {on}: mouse mode started or ended (the pad drives the cursor meanwhile)
 //                                 library  the full list after any change (a journal review sends it too)
+//                                 lists    your own lists after any change (host.library.lists)
 //                                 settings the whole settings object after any change (host.settings.set)
 //                                 display  a display-mode trial: {state: 'trial' | 'kept' | 'reverted', mode}
 //                                 update   the update status (host.cloud.update) after any change
@@ -76,6 +77,15 @@ export const host = {
     journal: () => call('library', 'journal'), // played or reviewed games, then removed ones (removedAt)
     review: (id, journal) => call('library', 'review', { id, journal }), // sets the whole journal; resolves with the game
     forget: id => call('library', 'forget', { id }), // a removed game leaves the journal, art and all
+    // your own lists (row B3), shared by everyone on the PC: [{id, name, games: [game ids, in the order added],
+    // createdAt}], oldest first. A list keeps a game whose folder is gone. Names are trimmed, up to 32 characters and
+    // not taken (any case): a refused one rejects with the reason. Changes resolve with every list (createList: with the
+    // new one) and the `lists` event follows.
+    lists: () => call('library', 'lists'),
+    createList: (name, game) => call('library', 'list_create', { name, game }), // game: put it in the new list too
+    renameList: (id, name) => call('library', 'list_rename', { id, name }),
+    deleteList: id => call('library', 'list_delete', { id }),
+    toggleList: (id, game, on) => call('library', 'list_toggle', { id, game, on }),
   },
   // Settings (rows A9, A10): settings.json. set() merges a patch, saves and emits `settings` with the whole object.
   settings: {
@@ -433,6 +443,36 @@ const MOCK = {
       emit('library', mockLibrary);
       return g;
     },
+    // ?lists=0: none yet; else "Couch Co-op" with two games and one whose folder is gone
+    lists: () => mockLists,
+    list_create: ({ name, game }) => {
+      const n = mockListName(name);
+      let t = Date.now();
+      while (mockLists.some(l => l.id === `l${t.toString(36)}`)) t++;
+      const list = { id: `l${t.toString(36)}`, name: n, games: game ? [game] : [], createdAt: Date.now() };
+      mockLists.push(list);
+      emit('lists', mockLists);
+      return list;
+    },
+    list_rename: ({ id, name }) => {
+      const l = mockList(id);
+      l.name = mockListName(name, id);
+      emit('lists', mockLists);
+      return mockLists;
+    },
+    list_delete: ({ id }) => {
+      mockList(id);
+      mockLists.splice(0, mockLists.length, ...mockLists.filter(l => l.id !== id));
+      emit('lists', mockLists);
+      return mockLists;
+    },
+    list_toggle: ({ id, game, on }) => {
+      const l = mockList(id);
+      if (on && !l.games.includes(game)) l.games.push(game);
+      if (!on) l.games = l.games.filter(g => g !== game);
+      emit('lists', mockLists);
+      return mockLists;
+    },
     forget: ({ id }) => {
       const i = mockKept.findIndex(x => x.id === id);
       if (i < 0) throw new Error(`${id} is not a removed game`);
@@ -564,6 +604,17 @@ const MOCK = {
 };
 
 let mockCaptures = null;
+// your own lists, as library/collections.rs keeps them
+const mockLists = query.get('lists') === '0' ? []
+  : [{ id: 'l1', name: 'Couch Co-op', games: ['celeste', 'gone-game', 'hades'], createdAt: Date.now() - 20 * DAY }];
+const mockList = id => mockLists.find(l => l.id === id) ?? (() => { throw new Error("That list isn't there any more."); })();
+function mockListName(name, except) {
+  const n = String(name ?? '').trim().split(/\s+/).join(' ');
+  if (!n) throw new Error('Type a name for the list.');
+  if ([...n].length > 32) throw new Error('A list name can be up to 32 characters.');
+  if (mockLists.some(l => l.id !== except && l.name.toLowerCase() === n.toLowerCase())) throw new Error(`There's already a list called ${n}.`);
+  return n;
+}
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MOCK_NOTES = '- Saved Data: back up your time played and journal to GitHub, free\n- Updates download by themselves and install the next time Padwake starts\n- The Journal shows games restored from a backup';
 const mockCloud = {
@@ -737,7 +788,7 @@ async function mock(area, command, args) {
   return structuredClone(await fn(args));
 }
 
-if (isMock) window.__mock = { emit, library: mockLibrary, kept: mockKept, settings: mockSettings, rumbles: mockRumbles };
+if (isMock) window.__mock = { emit, library: mockLibrary, kept: mockKept, settings: mockSettings, rumbles: mockRumbles, lists: mockLists };
 if (isMock) window.__mock.system = mockSystem; // Settings tests read the power log and the display trial
 if (isMock) window.__mock.cloud = mockCloud; // update and backup tests
 if (isMock) window.__mock.users = mockUsers; // users tests

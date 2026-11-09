@@ -28,6 +28,7 @@ import { toast } from '../control-center/toast.js';
 import { sorted, SORTS, STORES } from '../library/library.js'; // the preview shows the Library's first rows in its order
 import { avatarHtml } from '../users/avatars.js';
 import * as users from '../users/store.js';
+import * as keyboard from '../keyboard/keyboard.js';
 
 const BIG = 168, SMALL = 106, SCALE = SMALL / BIG;
 const FOCUS_X = 172, PREV_X = 50, NEXT_X = 356, PITCH = 114;
@@ -88,6 +89,7 @@ let topIndex = 0, heroIndex = 0, cardIndex = 0, menuIndex = 0;
 let menuFrom = 'row', menuItems = [], cards = [], hubGame = null;
 let menuBack = null;          // B in a sub-menu: back to the menu it came from (else B closes)
 let profiles = {};            // row B2: settings.displayProfiles, {id: {mode: {width, height, hz}, hdr}} (missing: the PC's)
+let kb = null;                // row B3: the on-screen keyboard naming a new list (Add to List…)
 let running = null;           // the running game's id ('game' events)
 let switchTo = null;          // the game to start once the running one has closed (askSwitch)
 let cameFrom = null;          // {id, from}: the Library or Search opened Home on this game (the session log's "from")
@@ -184,6 +186,8 @@ export default {
   leave() {
     onTop = false;
     cameFrom = null;
+    kb?.close();
+    kb = null;
     if (run) { stopRun(); showNow(); }
     stopVideo();
   },
@@ -191,6 +195,7 @@ export default {
   action(name, e = {}) {
     if (zone === 'busy') return false;
     if (zone === 'viewer') return viewerAction(name, e);
+    if (kb?.isOpen) return kb.action(name, e);
     if (name === 'y') { app.push('search'); return true; }
     if (name === 'view' && zone !== 'menu' && zone !== 'info') { app.push('gallery'); return true; } // the Media Gallery
     if (zone === 'menu') return menuAction(name, e);
@@ -1403,6 +1408,7 @@ function openMenu(from, focus = 0) {
     ['Information', () => showInfo(g)],
     ['Journal', () => { closeMenu(); app.push('journal', { id: g.id }); }],
     ['Display for This Game', () => displayMenu(g)],
+    ['Add to List…', () => listMenu(g)],
     ['Refresh art', () => { closeMenu(); host.library.refresh?.(g.id).catch(e => console.warn('refresh', e)); }],
     ...(running === g.id ? [['Close Game', () => { closeMenu(); host.games.close?.(g.id).catch(e => console.warn('close', e)); }]] : []),
   ];
@@ -1529,6 +1535,41 @@ function hdrMenu(g) {
   const pick = hdr => saveProfile(g, { ...p, hdr }).then(() => displayMenu(g, 1));
   menuItems = [['Use PC Setting', () => pick(null), p.hdr == null], ['On', () => pick(true), p.hdr === true], ['Off', () => pick(false), p.hdr === false]];
   return showMenu(menuFrom, 'HDR', { back: () => displayMenu(g, 1), focus: menuItems.findIndex(m => m[2]) });
+}
+
+// ---------- Add to List… (row B3) ----------
+// Your own lists, shared by everyone on the PC (src-tauri/src/library/collections.rs), each ticked when the game is in
+// it: A puts it in or takes it out and the menu stays. New List… names one on the on-screen keyboard and puts the game
+// in it; a name the host refuses opens the keyboard again with the reason as its title.
+let ownLists = [];
+async function listMenu(g, focus = 0) {
+  const from = menuFrom;
+  ownLists = await Promise.resolve(host.library.lists()).catch(() => ownLists);
+  if (zone !== 'menu' || menuFrom !== from) return;
+  menuItems = [
+    ...ownLists.map((l, i) => [l.name, () => toggleList(g, l, i), l.games.includes(g.id)]),
+    ['New List…', () => newList(g)],
+  ];
+  showMenu(from, 'Add to List', { back: () => openMenu(from, from === 'row' ? 4 : 3), focus });
+}
+
+async function toggleList(g, l, i) {
+  await Promise.resolve(host.library.toggleList(l.id, g.id, !l.games.includes(g.id))).catch(e => console.warn('lists', e));
+  return listMenu(g, i);
+}
+
+function newList(g, title = 'New List', value = '') {
+  kb = keyboard.open({
+    title, value, maxLength: 32, placeholder: 'List name', parent: root,
+    onDone: v => {
+      kb = null;
+      Promise.resolve(host.library.createList(v, g.id))
+        .then(l => listMenu(g, ownLists.length).then(() => menuSelect(menuItems.findIndex(m => m[0] === l.name))))
+        .catch(e => newList(g, String(e?.message ?? e), v));
+    },
+    onCancel: () => { kb = null; },
+  });
+  return true;
 }
 
 function showInfo(g) {

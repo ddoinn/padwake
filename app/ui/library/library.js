@@ -18,11 +18,17 @@
 // Covers load lazily per row, draw nothing until decoded, then fade in (§1.10).
 // Buttons: A shows the game on Home, B goes back to Home's Library tile, Y opens Search, Menu or the sort button
 // opens the sort menu, LT / RT jump 2 rows; Up from the first row reaches the tabs, Left from column 1 the button.
-// Tabs: Your Collection (the grid) and Journal (journal.js: played games, removed ones too). LB / RB or the tab row
-// switch them as the PS5 does (§2): the page empties for 200 ms, then the other fades in. The sort button and menu
-// sort whichever is on.
+// Tabs: Your Collection (the grid), Journal (journal.js: played games, removed ones too) and Lists (lists.js: smart lists
+// and your own, row B3). LB / RB or the tab row switch them as the PS5 does (§2): the page empties for 200 ms, then the
+// other fades in. The sort button and menu sort whichever is on.
+// Lists: A on a list opens it as this cover grid ("Couch Co-op: 3" in the count line), the same way a tab comes in;
+// B goes back to its tile. The sort button sorts it with the Library's sort. Menu on your own list (its tile, or a
+// game in it) offers Rename List, Delete List and, on a game, Remove from List; names are typed on the on-screen
+// keyboard, and a refused name opens it again with the reason as its title.
 
 import * as journal from './journal.js';
+import * as lists from './lists.js';
+import * as keyboard from '../keyboard/keyboard.js';
 import { mount as spotlight } from '../background/spotlight.js'; // the moving spotlight, as Search and Settings
 
 const FRAME = 1000 / 60;
@@ -56,7 +62,7 @@ export const SORTS = [
   { id: 'za', label: 'Name (Z - A)' },
   { id: 'most', label: 'Most played' },
 ];
-const TABS = [{ id: 'collection', label: 'Your Collection' }, { id: 'journal', label: 'Journal' }]; // stores add Installed
+const TABS = [{ id: 'collection', label: 'Your Collection' }, { id: 'journal', label: 'Journal' }, { id: 'lists', label: 'Lists' }];
 const TAB_FADE = { duration: 315, delay: 200, easing: 'cubic-bezier(.33, 0, .67, 1)', fill: 'backwards' };
 
 const ICONS = {
@@ -76,11 +82,15 @@ const TITLE_HOME = `translate(182px, 176px) scale(${30 / 31})`;
 
 let app, host, root;
 const $ = {};
-let games = [];          // sorted
+let all = [];            // the library
+let games = [];          // what the grid shows, sorted: the library, or the open list's games
+let openList = null;     // the id of the list open on the Lists tab
+let kb = null;           // the on-screen keyboard, naming a list
 let sortId = 'played';
 let gamesRoot = '';
-let zone = 'grid';       // grid | journal (the Journal tab's list) | tabs | button | menu | busy
+let zone = 'grid';       // grid | journal (the Journal tab's list) | lists (the Lists tab's tiles) | tabs | button | menu | busy
 let index = 0, menuIndex = 0, menuFrom = 'grid', tabIndex = 0, heldRowAt = 0;
+let menuItems = [];      // what the menu offers: [{label, cur (ticked), run}]
 let scrollY = 0;         // the content's scroll target
 let scrollAnim = null, scrollFrom = 0;
 let ringAnim = null, marquee = null, marqueeTimer = 0, barTimer = 0, backTimer = 0;
@@ -123,13 +133,18 @@ export default {
       app, host, root: el, scroll: { curve: SCROLL, ms: SCROLL_MS, frame: FRAME, ease: t => ease(SCROLL_PTS, t) },
       toTabs: focusTabs, toButton: focusButton,
     });
+    lists.mount({
+      app, host, root: el, scroll: { curve: SCROLL, ms: SCROLL_MS, frame: FRAME, ease: t => ease(SCROLL_PTS, t) },
+      toTabs: focusTabs, open: openListView, create: newList, options: id => listOptions(id, 'lists'), changed: listsChanged,
+    });
 
     host.on('library', list => setGames(list));
     host.on('settings', s => { gamesRoot = s?.gamesRoot ?? gamesRoot; paintEmpty(); });
     host.settings.get().then(s => { gamesRoot = s?.gamesRoot ?? ''; paintEmpty(); }).catch(() => {});
     // read-only state for tests (tools/app/ui-probe.mjs eval steps)
     window.__library = {
-      state: () => ({ zone, tab: TABS[tabIndex].id, index, id: games[index]?.id, sort: sortId, order: games.map(g => g.id), scroll: scrollY, menu: menuIndex }),
+      state: () => ({ zone, tab: TABS[tabIndex].id, index, id: games[index]?.id, sort: sortId, order: games.map(g => g.id), scroll: scrollY,
+        menu: menuIndex, menuItems: menuItems.map(m => m.label), list: openList, count: $.count.textContent, kb: kb?.isOpen ? kb.value : null }),
       sort: id => applySort(id),
     };
     setGames(await host.library.list());
@@ -147,21 +162,25 @@ export default {
     onTop = false;
     clearTimeout(backTimer);
     closeMenu(true);
+    kb?.close();
+    kb = null;
     // the morphs hold their end state (fill forwards) until the screen goes; cancel them so the next enter starts clean
     root.getAnimations({ subtree: true }).forEach(a => a.cancel());
     stopMarquee();
-    if (zone === 'busy') zone = onJournal() ? 'journal' : 'grid';
+    if (zone === 'busy') zone = onJournal() ? 'journal' : onTiles() ? 'lists' : 'grid';
   },
 
   action(name, e = {}) {
     if (zone === 'busy') return 'none';
+    if (kb?.isOpen) return kb.action(name, e);
     if (name === 'release') return false;
-    if (name === 'b' && zone !== 'menu') return back();
+    if (name === 'b' && zone !== 'menu') return openList ? (!e.held && closeListView()) : back();
     if (name === 'y' && zone !== 'menu' && !e.held) { app.push('search'); return true; } // as on Home
     if (name === 'lb' || name === 'rb') return switchTab(tabIndex + (name === 'lb' ? -1 : 1));
     if (name === 'point' || name === 'click') return pointer(name, e);
     if (zone === 'menu') return menuAction(name, e);
-    if (name === 'menu' && !e.held) return openMenu(zone === 'button' ? 'button' : 'grid');
+    if (zone === 'lists') return lists.action(name, e);
+    if (name === 'menu' && !e.held) return openList && lists.isOwn(openList) && zone !== 'button' ? listOptions(openList, 'grid') : openMenu(zone === 'button' ? 'button' : 'grid');
     if (zone === 'tabs') return tabsAction(name, e);
     if (zone === 'button') return buttonAction(name, e);
     if (zone === 'journal') return journal.action(name, e);
@@ -171,9 +190,27 @@ export default {
 
 // ---------- data and sort ----------
 function setGames(list) {
+  all = list ?? [];
+  lists.setLibrary(all);
+  showGames();
+}
+
+// the grid's games again (a library change, or the open list changed); a smart list that empties or a deleted list
+// closes back to the tiles
+function showGames() {
+  const inList = openList ? lists.gamesOf(openList) : all;
+  if (!inList || (openList && !inList.length && !lists.isOwn(openList))) return closeListView(false);
   const keep = games[index]?.id;
-  games = sorted(list ?? [], sortId);
-  index = Math.max(0, games.findIndex(g => g.id === keep));
+  games = sorted(inList, sortId);
+  const at = games.findIndex(g => g.id === keep);
+  // the focused game left (taken out of the open list): focus stays where it was, and the grid follows it
+  index = at >= 0 ? at : Math.min(index, Math.max(0, games.length - 1));
+  if (at < 0 && scrollY !== scrollFor(index)) {
+    scrollAnim?.cancel();
+    scrollAnim = null;
+    scrollY = scrollFor(index);
+    $.content.style.transform = `translateY(${-scrollY}px)`;
+  }
   if (!games.length && zone === 'grid') zone = 'tabs';
   paintCounts();
   rebuild();
@@ -205,7 +242,7 @@ function applySort(id) {
 }
 
 function paintCounts() {
-  $.count.textContent = `All: ${games.length}`;
+  $.count.textContent = openList ? `${lists.nameOf(openList)}: ${games.length}` : `All: ${games.length}`;
   $.sortlabel.textContent = `Sort by: ${SORTS.find(s => s.id === sortId).label}`;
   root.classList.toggle('none', !games.length);
   paintEmpty();
@@ -213,7 +250,8 @@ function paintCounts() {
 
 function paintEmpty() {
   if (!$.empty) return;
-  $.empty.querySelector('.sub').textContent =
+  $.empty.querySelector('.msg').textContent = openList ? 'Nothing in this list yet' : 'No games yet';
+  $.empty.querySelector('.sub').textContent = openList ? 'Press ☰ on a game on Home, then Add to List…, to put it here.' :
     `Put each game in its own folder in ${gamesRoot || 'the games folder'}, or install games with Steam, Epic Games, GOG, Xbox or the EA app. New folders show up here a few minutes after they stop changing.`;
 }
 
@@ -226,6 +264,7 @@ const scrollFor = i => (rowOf(i) === 0 ? 0 : coverY(i) - PIN_Y); // the first ro
 
 function reset() {
   if (tabIndex) selectTab(0, false);
+  if (openList) closeListView(false);
   zone = games.length ? 'grid' : 'tabs';
   index = 0;
   closeMenu(true);
@@ -449,6 +488,7 @@ function focusTabs() {
   zone = 'tabs';
   placeFocus(null);
   journal.blur();
+  lists.blur();
   paintZone();
   return true;
 }
@@ -457,17 +497,20 @@ function focusButton() {
   zone = 'button';
   placeFocus(null);
   journal.blur();
+  lists.blur();
   paintZone();
   return true;
 }
 
 const onJournal = () => TABS[tabIndex].id === 'journal';
+const onLists = () => TABS[tabIndex].id === 'lists';
+const onTiles = () => onLists() && !openList; // the Lists tab's tiles, no list open
 
-// into the tab's content: the grid, or the journal's list
+// into the tab's content: the grid, the journal's list, or the list tiles
 function focusContent(ring = RING_IN) {
-  if (onJournal()) {
-    if (!journal.focus(ring)) return false;
-    zone = 'journal';
+  if (onJournal() || onTiles()) {
+    if (!(onJournal() ? journal : lists).focus(ring)) return false;
+    zone = onJournal() ? 'journal' : 'lists';
     placeFocus(null);
     paintZone();
     return true;
@@ -507,20 +550,24 @@ function switchTab(i) {
 // §2 "Tab switch content": the old page goes in a frame, the page stays empty 200 ms, the new one fades in over 315 ms;
 // the tab box moves (old box gone, the new one fades in after 170 ms). Focus in the content stays in the content.
 function selectTab(i, animate) {
-  const inContent = zone === 'grid' || zone === 'journal';
+  const inContent = zone === 'grid' || zone === 'journal' || zone === 'lists';
   closeMenu(true);
+  if (openList) closeListView(false);
   tabIndex = i;
   $.tabEls.forEach((el, k) => el.classList.toggle('sel', k === i));
   placeTabBox();
-  const j = onJournal();
+  const j = onJournal(), l = onLists();
   root.classList.toggle('tab-journal', j);
+  root.classList.toggle('tab-lists', l);
   journal.show(j);
+  lists.show(l);
   placeFocus(null);
   if (animate) {
-    for (const el of j ? [$.sortbtn] : [$.view, $.empty, $.bar, $.sortbtn]) el.animate([{ opacity: 0 }, { opacity: 1 }], TAB_FADE);
+    for (const el of j ? [$.sortbtn] : l ? [] : [$.view, $.empty, $.bar, $.sortbtn]) el.animate([{ opacity: 0 }, { opacity: 1 }], TAB_FADE);
     if (zone === 'tabs') $.tabbox.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300, delay: 170, easing: 'linear', fill: 'backwards' });
   }
-  if (inContent && !focusContent({ delay: 200 + 140, ms: 140 })) zone = 'tabs';
+  // the sort button isn't there over the list tiles: focus goes to them
+  if ((inContent || (zone === 'button' && onTiles())) && !focusContent({ delay: 200 + 140, ms: 140 })) zone = 'tabs';
   paintZone();
 }
 
@@ -536,17 +583,36 @@ function buttonAction(name, e) {
 const menuSorts = () => (onJournal() ? journal.SORTS : SORTS);
 const curSort = () => (onJournal() ? journal.sort() : sortId);
 
-function openMenu(from) {
+// the sort orders as menu items: choosing one sorts the tab that's on
+function sortItems() {
+  return menuSorts().map(s => ({ label: s.label, cur: s.id === curSort(), run: () => chooseSort(s.id) }));
+}
+
+function chooseSort(chosen) {
+  if (chosen === curSort()) return;
+  if (onJournal()) {
+    journal.applySort(chosen);
+    if (zone === 'journal') journal.focus(RING_IN);
+  } else {
+    applySort(chosen);
+    if (zone === 'grid') placeFocus(RING_IN);
+  }
+}
+
+// from: where focus goes back to (grid | button | lists); items: the sort orders unless given; focusAt: the item
+// focused first (else the ticked one)
+function openMenu(from, items = sortItems(), focusAt = null) {
   menuFrom = from;
+  menuItems = items;
   zone = 'menu';
   placeFocus(null);
   journal.blur();
+  lists.blur();
   paintZone();
-  const sorts = menuSorts();
   $.opts.forEach(el => el.remove());
-  $.opts = sorts.map((s, i) => {
+  $.opts = items.map((s, i) => {
     const el = document.createElement('div');
-    el.className = `opt${s.id === curSort() ? ' cur' : ''}`;
+    el.className = `opt${s.cur ? ' cur' : ''}`;
     el.dataset.nav = `sort:${i}`;
     el.style.top = `${3 + i * 72}px`;
     el.innerHTML = `${ICONS.check}<span></span>`;
@@ -554,8 +620,8 @@ function openMenu(from) {
     return el;
   });
   $.mring.before(...$.opts);
-  $.menu.style.height = `${sorts.length * 72 + 16}px`;
-  menuIndex = Math.max(0, sorts.findIndex(s => s.id === curSort()));
+  $.menu.style.height = `${items.length * 72 + 16}px`;
+  menuIndex = focusAt ?? Math.max(0, items.findIndex(s => s.cur));
   paintMenu();
   root.classList.add('menu-open');
   $.dim.getAnimations().forEach(a => a.cancel());
@@ -572,10 +638,11 @@ function closeMenu(instant) {
   $.dim.getAnimations().forEach(a => a.cancel());
   if (!instant) $.dim.animate([{ opacity: 1 }, { opacity: 0 }], { duration: MENU_MS, easing: 'linear' });
   if (zone === 'menu') {
-    const empty = onJournal() ? !journal.count() : !games.length;
-    zone = menuFrom === 'button' || empty ? 'button' : onJournal() ? 'journal' : 'grid';
+    const empty = onJournal() ? !journal.count() : onTiles() ? false : !games.length;
+    zone = menuFrom === 'button' || empty ? 'button' : onJournal() ? 'journal' : onTiles() ? 'lists' : 'grid';
     if (zone === 'grid') placeFocus(RING_IN);
     if (zone === 'journal') journal.focus(RING_IN);
+    if (zone === 'lists') lists.focus(RING_IN);
     paintZone();
   }
   return true;
@@ -589,24 +656,16 @@ function paintMenu() {
 function menuAction(name, e) {
   if (name === 'up' || name === 'down') {
     const i = menuIndex + (name === 'up' ? -1 : 1);
-    if (i < 0 || i >= menuSorts().length) return false;
+    if (i < 0 || i >= menuItems.length) return false;
     menuIndex = i;
     paintMenu();
     return true;
   }
   if (e.held) return false;
   if (name === 'a') {
-    const chosen = menuSorts()[menuIndex].id;
+    const item = menuItems[menuIndex];
     closeMenu(false);
-    if (chosen !== curSort()) {
-      if (onJournal()) {
-        journal.applySort(chosen);
-        if (zone === 'journal') journal.focus(RING_IN);
-      } else {
-        applySort(chosen);
-        if (zone === 'grid') placeFocus(RING_IN);
-      }
-    }
+    item.run();
     return true;
   }
   if (name === 'b' || name === 'menu') { closeMenu(false); return 'back'; }
@@ -622,6 +681,10 @@ function pointer(name, e) {
     menuIndex = i;
     paintMenu();
     return name === 'click' ? menuAction('a', {}) : 'none';
+  }
+  if (kind === 'ltile') {
+    if (zone !== 'lists') { zone = 'lists'; paintZone(); }
+    return lists.pointer(name, i);
   }
   if (kind === 'jrow') {
     if (zone !== 'journal') { zone = 'journal'; paintZone(); }
@@ -674,10 +737,96 @@ function back() {
   $.lbg.animate([{ opacity: 1 }, { opacity: 0 }], o);
   journal.fadeOut(o);
   journal.blur();
+  lists.fadeOut(o);
+  lists.blur();
   backTimer = setTimeout(() => {
     if (zone !== 'busy') return;
     zone = was;
     app.go('home', { focus: '#library' });
   }, BACK_FADE_MS + BACK_MS);
   return 'back';
+}
+
+// ---------- Lists (row B3): an open list, and your lists' names ----------
+// A on a tile: the tiles go in a frame, the page stays empty 200 ms, then the list's covers fade in (§2 "Tab switch")
+function openListView(id) {
+  if (!lists.gamesOf(id)) return false;
+  openList = id;
+  root.classList.add('list-open');
+  lists.blur();
+  index = 0;
+  scrollAnim?.cancel();
+  scrollAnim = null;
+  scrollY = 0;
+  $.content.style.transform = '';
+  zone = 'grid';
+  showGames();
+  for (const el of [$.view, $.empty, $.bar, $.sortbtn]) el.animate([{ opacity: 0 }, { opacity: 1 }], TAB_FADE);
+  if (games.length) focus(0, { delay: 200 + 140, ms: 140 });
+  else focusButton();
+  return true;
+}
+
+// B in an open list: back to its tile, the same way
+function closeListView(animate = true) {
+  const id = openList;
+  if (!id) return false;
+  openList = null;
+  root.classList.remove('list-open');
+  closeMenu(true);
+  scrollAnim?.cancel();
+  scrollAnim = null;
+  scrollY = 0;
+  $.content.style.transform = '';
+  showGames();
+  if (onLists()) {
+    lists.back(id);
+    if (animate || zone !== 'tabs') {
+      zone = 'lists';
+      placeFocus(null);
+      lists.focus({ delay: 200 + 140, ms: 140 });
+    }
+  }
+  paintZone();
+  return animate ? 'back' : true;
+}
+
+// your lists changed (here, on Home, or a list deleted): the open one follows
+function listsChanged() {
+  if (openList) showGames();
+}
+
+// Menu on your own list: its tile (from 'lists') or a game in it (from 'grid')
+function listOptions(id, from) {
+  const g = from === 'grid' ? games[index] : null;
+  return openMenu(from, [
+    ...(g ? [{ label: 'Remove from List', run: () => host.library.toggleList(id, g.id, false).catch(e => console.warn('lists', e)) }] : []),
+    { label: 'Rename List', run: () => askName('Rename List', lists.nameOf(id) ?? '', name => host.library.renameList(id, name)) },
+    { label: 'Delete List', run: () => confirmDelete(id, from) },
+  ], 0);
+}
+
+// lists are everyone's: say so, and start on Cancel
+function confirmDelete(id, from) {
+  openMenu(from, [
+    { label: 'Delete for Everyone', run: () => host.library.deleteList(id).catch(e => console.warn('lists', e)) },
+    { label: 'Cancel', run: () => {} },
+  ], 1);
+}
+
+function newList() {
+  askName('New List', '', name => host.library.createList(name).then(l => { lists.focusOn(l.id); return l; }));
+}
+
+// the on-screen keyboard; a name the host refuses opens it again with the reason as its title
+function askName(title, value, save) {
+  kb = keyboard.open({
+    title, value, maxLength: 32, placeholder: 'List name', parent: root,
+    onDone: v => {
+      kb = null;
+      Promise.resolve(save(v)).catch(e => askName(String(e?.message ?? e), v, save));
+    },
+    onCancel: () => { kb = null; },
+  });
+  return true;
 }
