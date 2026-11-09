@@ -156,6 +156,38 @@ Decisions (2026-11-08, Madhav: "log everything you can so that we can make detai
   tests: a profile for a mode the monitor no longer offers is skipped, not applied.
 - **Owns:** `app/src-tauri/src/system/display.rs`, `app/src-tauri/src/games/mod.rs` (launch and end),
   `app/src-tauri/src/settings/mod.rs`, the Options menu entry and its picker in `app/ui/home/home.js`.
+- **Done (2026-11-09), measured:**
+  - On the Avita (its display offers 1280 × 720 at 40 and 60 Hz; it was at 1920 × 1080 · 60 Hz, also its saved mode),
+    a release build with its own data dir, the test pad and `Stand-in Long` with a 1280 × 720 · 60 Hz profile, run
+    in the desktop session through a one-shot scheduled task:
+    - The display was at 1280 × 720 · 60 Hz 60 ms after the game's process appeared (18 ms on the final head), and a
+      screenshot of the game is 1280 × 720. Windows' saved mode stayed 1920 × 1080 · 60 Hz.
+    - Quitting brought 1920 × 1080 · 60 Hz back 69 ms after the game's process ended (93 ms on the final head).
+    - Padwake killed mid-game: its watchdog restarted it, and the restart put 1920 × 1080 · 60 Hz back 230 ms after
+      the kill (`padwake.log`: "a game's display was still on from before Padwake stopped: put back"). The dynamic
+      mode outlives the killed process, so it was the restart that put it back. Run on the first head; the final
+      head's run stopped before this part because the person guard tripped, and this path is unchanged since.
+    - The session log has the mode the game ran at: `"atStart"` and `"atEnd"` both
+      `{"width":1280,"height":720,"hz":60,"hdr":false}`; the restart's line has it in `"atStart"`.
+  - Unit tests: `a_profile_changes_only_what_the_display_can_do_and_isnt_on` (a mode the monitor no longer offers is
+    skipped, HDR without HDR is skipped, what is already on changes nothing),
+    `profiles_and_what_to_put_back_read_and_write_with_only_their_parts`, `a_games_display_profile_is_found_by_its_id`.
+    `cargo test --lib --locked`: 128 passed, 14 ignored.
+  - UI probes: every line in `DEVELOPMENT.md` passes, including the new `display-profile.json` (17 checks: the menu
+    entry, every mode listed, a long list scrolling, saving by game id, HDR, B back, the hub line, a mode that's no
+    longer offered, Use PC Setting). `gallery.json` only with `scene=home`, as on `main`.
+  - Decisions:
+    - A profile is `{"mode": {width, height, hz}, "hdr": bool}` in settings `displayProfiles`. Either part may be
+      missing, which means the PC's setting. The picker has "Resolution: …", "HDR: …" (only on a display with HDR,
+      or when a profile already has it) and "Use PC Setting" to clear both.
+    - What changes is written to `data\display-restore.json` before the change. HDR is switched first, then the mode
+      (switching HDR may reset it). The mode from before is always kept to put back. It's put back as the session
+      ends, before Home shows, and at the next start.
+    - A mode the display no longer offers stays listed in the picker as "(not available)", so it can be seen and
+      changed. At launch it is skipped and logged.
+    - Media apps never get a profile. Option menus now scroll a whole item at a time when they're taller than the
+      screen.
+  - Not proven live: HDR, because the Avita's display has none. Its order (HDR, then the mode) came from the review.
 
 ### Row B3: Collections and smart lists
 - **Outcome:**
