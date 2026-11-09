@@ -86,6 +86,11 @@ export const host = {
     renameList: (id, name) => call('library', 'list_rename', { id, name }),
     deleteList: id => call('library', 'list_delete', { id }),
     toggleList: (id, game, on) => call('library', 'list_toggle', { id, game, on }),
+    // the current user's logs for their recaps (row B4): {sessions: the session log, oldest first, each game session
+    // with `trophies` (the Padwake trophies it earned, replayed from today's totals); events: journal status changes
+    // [{at, type: 'status', game, status}]}. Lines are as library/sessions.rs writes them; fields from row B1b may be
+    // missing on older lines.
+    recap: () => call('library', 'recap'),
   },
   // Settings (rows A9, A10): settings.json. set() merges a patch, saves and emits `settings` with the whole object.
   settings: {
@@ -170,6 +175,17 @@ export const host = {
 const listeners = new Map();
 const emit = (event, payload) => listeners.get(event)?.forEach(fn => fn(structuredClone(payload)));
 const query = new URLSearchParams(location.search);
+// ?today=2026-11-10T20:00: the mock's clock starts there and runs on (Date.now only), so recaps and their notice are the
+// same on any day (tools/app/checks/recap.json). window.__mock.today(iso) moves it later in a run.
+const realNow = Date.now;
+let clockOffset = 0;
+const setToday = iso => { clockOffset = new Date(iso).getTime() - realNow(); };
+if (isMock && query.get('today')) {
+  setToday(query.get('today'));
+  Date.now = () => realNow() + clockOffset;
+  // each run starts with no recap notice shown (it is remembered in the page's storage, which a probe profile keeps)
+  try { for (const k of Object.keys(localStorage)) if (k.startsWith('recap.noticed.')) localStorage.removeItem(k); } catch {}
+}
 
 const slug = name => name.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || 'game';
 const mockGame = name => ({
@@ -223,6 +239,11 @@ function mockExit(id) {
     g.firstPlayed ??= mockSession.startedAt;
   }
   mockRunning = null;
+  // its line in the player's log, as the host appends it
+  const secs = Math.round((Date.now() - mockSession.startedAt) / 1000);
+  mockRecaps[mockUsers.current]?.sessions.push(mockSession.kind === 'media'
+    ? { start: mockSession.startedAt, end: Date.now(), secs, kind: 'media', app: id }
+    : { game: id, start: mockSession.startedAt, end: Date.now(), secs });
   emit('library', mockLibrary);
   emit('game', { id, kind: mockSession?.kind ?? 'game', state: 'exited', front: mockSession?.front ?? 'game',
     played: Math.round((Date.now() - mockSession.startedAt) / 1000) });
@@ -782,6 +803,51 @@ MOCK.users = {
   },
 };
 
+// ---- recaps (row B4): with ?today=, each user's session log over last month and this one, as the host sends it
+// (trophies already replayed). Madhav's log begins on the 3rd of last month with lines from before row B1b (no front,
+// achievements or media); this month's lines have them. Asha played this month only; Kabir nothing. Without ?today=
+// every log is empty, so other checks see no recap notice.
+const mockRecaps = { u1: { sessions: [], events: [] }, u2: { sessions: [], events: [] }, u3: { sessions: [], events: [] } };
+function mockRecapLogs() {
+  const now = new Date(Date.now());
+  const at = (back, day, h, m = 0) => new Date(now.getFullYear(), now.getMonth() - back, day, h, m).getTime();
+  const line = (game, back, day, h, m, mins, more = {}) => {
+    const start = at(back, day, h, m);
+    return { game, start, end: start + mins * 60e3, secs: mins * 60, ...more };
+  };
+  const b1b = (front, more = {}) => ({ v: '0.4.0', from: 'home', ended: 'quit', front, ...more });
+  const media = (app, back, day, h, m, mins) => ({ ...line('', back, day, h, m, mins), game: undefined, kind: 'media', app, v: '0.4.0' });
+  const status = (game, back, day, h, s) => ({ at: at(back, day, h), type: 'status', game, status: s });
+  const madhav = [
+    line('hades', 1, 3, 21, 0, 120), line('hades', 1, 4, 20, 30, 180), line('celeste', 1, 7, 19, 0, 60),
+    line('hades', 1, 11, 22, 0, 90), line('celeste', 1, 14, 19, 30, 45), line('hades', 1, 18, 21, 30, 240, { trophies: ['invested'] }),
+    line('elden-ring', 1, 20, 23, 0, 120, { trophies: ['first-steps'] }), line('hades', 1, 25, 14, 0, 60),
+    line('hades', 0, 1, 20, 0, 120, b1b({ game: 6600, home: 240, controlCenter: 120, other: 240 }, { achievements: [21, 23] })),
+    media('youtube', 0, 2, 19, 0, 45),
+    line('hollow-knight', 0, 3, 21, 0, 90, b1b({ game: 5100, home: 0, controlCenter: 300, other: 0 }, { achievements: [18, 20] })),
+    line('celeste', 0, 6, 22, 30, 60, b1b({ game: 3300, home: 300, controlCenter: 0, other: 0 })),
+    line('ghost-of-tsushima-dc', 0, 7, 20, 0, 60, b1b({ game: 3400, home: 200, controlCenter: 0, other: 0 }, { trophies: ['first-steps'], from: 'library' })),
+    line('god-of-war', 0, 8, 15, 0, 180, b1b({ game: 10200, home: 300, controlCenter: 0, other: 300 }, { achievements: [36, 37], trophies: ['regular'], screenshots: 2 })),
+    media('netflix', 0, 9, 21, 0, 120),
+  ];
+  const asha = [
+    line('hollow-knight', 0, 2, 22, 0, 120, b1b({ game: 7000, home: 200, controlCenter: 0, other: 0 })),
+    line('hollow-knight', 0, 5, 23, 30, 60, b1b({ game: 3600, home: 0, controlCenter: 0, other: 0 })),
+    line('celeste', 0, 6, 18, 0, 60, b1b({ game: 3500, home: 100, controlCenter: 0, other: 0 }, { trophies: ['first-steps'] })),
+  ];
+  const past = l => l.filter(s => s.start < Date.now());
+  mockRecaps.u1 = { sessions: past(madhav), events: [status('elden-ring', 1, 20, 23, 'playing'), status('celeste', 1, 26, 10, 'finished'),
+    status('hollow-knight', 0, 4, 12, 'paused'), status('god-of-war', 0, 8, 18, 'completed')].filter(e => e.at < Date.now()) };
+  mockRecaps.u2 = { sessions: past(asha), events: [] };
+  mockRecaps.u3 = { sessions: [], events: [] };
+  // first plays as the library knows them: the log's games were played before it began, but for these two
+  const first = { hades: at(2, 1, 20), celeste: at(3, 9, 20), 'hollow-knight': at(3, 15, 20), 'god-of-war': at(4, 2, 20),
+    'elden-ring': at(1, 20, 23), 'ghost-of-tsushima-dc': at(0, 7, 20) };
+  for (const [id, t] of Object.entries(first)) { const g = mockLibrary.find(x => x.id === id); if (g) g.firstPlayed = t; }
+}
+if (isMock && query.get('today')) mockRecapLogs();
+MOCK.library.recap = () => mockRecaps[mockUsers.current] ?? { sessions: [], events: [] };
+
 async function mock(area, command, args) {
   const fn = MOCK[area]?.[command];
   if (!fn) throw new Error(`mock host has no ${area}|${command}`);
@@ -794,3 +860,5 @@ if (isMock) window.__mock.cloud = mockCloud; // update and backup tests
 if (isMock) window.__mock.users = mockUsers; // users tests
 if (isMock) window.__mock.guideOverGame = mockGuideOverGame; // Control Center tests: Guide over a running game
 if (isMock) window.__mock.playLog = mockPlayLog; // the session log's launch places and top screens
+if (isMock) window.__mock.recaps = mockRecaps; // recap tests: each user's log
+if (isMock) window.__mock.today = iso => { setToday(iso); Date.now = () => realNow() + clockOffset; mockRecapLogs(); }; // move the clock
