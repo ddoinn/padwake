@@ -5,7 +5,10 @@
 //!   the later last play; its journal comes from the backup only if it has none here;
 //! - a played or reviewed game that isn't here joins the journal as "from your backup" (`restoredAt`), and gets its
 //!   time and journal back when a folder of the same name appears in the games folder.
+//! - The session log (`sessions.rs`) goes with it and merges by game id and start time (`sessions::merge`), both on
+//!   restore and on upload, so no session is doubled or dropped.
 
+pub use super::sessions::Session;
 use super::{Game, Journal};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -23,6 +26,8 @@ pub struct Backup {
     /// the PC it came from
     pub machine: String,
     pub games: Vec<Entry>,
+    /// the user's session log (`sessions.rs`); a backup from before it has none
+    pub sessions: Vec<Session>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
@@ -249,6 +254,15 @@ mod tests {
         assert_eq!(out[0].playtime_sec, 900);
         assert_eq!(out[2].journal.rating, Some(5));
         assert_eq!(out[2].removed_at, None, "the other PC's entry is uploaded as it was");
+    }
+
+    #[test]
+    fn a_backup_from_before_the_session_log_reads_with_none() {
+        let b: Backup = serde_json::from_str(r#"{"app":"padwake","format":1,"games":[{"id":"hades","playtimeSec":5}]}"#).unwrap();
+        assert_eq!((b.games.len(), b.sessions.len()), (1, 0));
+        let b = Backup { sessions: vec![Session::ended("hades", 5, 9_000)], ..b };
+        let back: Backup = serde_json::from_str(&serde_json::to_string(&b).unwrap()).unwrap();
+        assert_eq!(back, b);
     }
 
     #[test]

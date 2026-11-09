@@ -1,0 +1,130 @@
+# Padwake: plan
+
+What's next for Padwake, and the decisions behind it. The PS5 measurements the UI follows are in the sibling repo
+`ch-night` (`design/ps5/`); code comments that say "row A…" mean rows in `ch-night/PLAN.md`. Rows here are "B".
+
+## Decisions (2026-11-07, Madhav: "lock it")
+
+1. **Next up: four features.** Display settings per game (B2), collections and smart lists (B3), a monthly and yearly
+   recap for each user (B1 + B4), and a PS5-feel polish pass (B5).
+2. **No game recommendations.** Neither "pick for tonight" from your own library, nor games you don't own, nor an
+   AI chat ("kind of ass right now"). Don't propose them again unless Madhav asks.
+3. **Later, not now:** the real trophy case (game achievements as trophies) and PlayStation / Switch controllers
+   (input is XInput only today). Context for the trophy case: every game, from any store, gets Padwake's six trophies.
+   Real achievements show only where the game keeps an unlock file Padwake reads (`library/progress.rs`); Epic,
+   GOG, Xbox and EA app achievements aren't read.
+4. **Recaps need a session log, which starts when B1 ships.** Today only totals are kept (time, sessions, first and
+   last played), and trophies have no dates. Months before B1 can't be shown. A "so far" view of the current month
+   is always there, so nobody waits for the 1st.
+5. **Who owns what.** Display profiles and your own collections are shared, like games and settings. Smart lists,
+   the session log and recaps belong to each user, like the Journal.
+6. **Standing rules still apply.** Nothing the player can set (journal status, rating) earns a trophy. Sony's
+   assets, names, font and sounds never ship. No 3D controller or connect animation. Home's measured speed and idle
+   cost (`docs/performance.md`) must not get worse.
+
+## Working on the Avita
+
+- Rust: set `CARGO_HOME` and `RUSTUP_HOME` under `W:\system\tools\rust` and put `cargo\bin` on PATH.
+- Line endings differ per file and there's no `.gitattributes`: edit with tools that keep them, and check
+  `git ls-files --eol` before committing.
+- Gates: `cargo test --lib --locked` in `app/src-tauri/`, and the UI probe checks listed in `DEVELOPMENT.md`.
+- Test library: `W:\games-test`. Pushing needs a `ddoinn` token.
+
+## Rows
+
+Rows run in order: B2, B3 and B5 all touch `app/ui/home/home.js`, and B1 and B2 both touch
+`app/src-tauri/src/games/mod.rs`. Each row's "done when" is red if any check misses; write what was measured into
+the row when it's done. B1 is worth a release of its own, so the log starts collecting sooner.
+
+### Row B1: Session log (each user's)
+- **Outcome:**
+  - Each finished session adds one line to `data\users\<id>\sessions.jsonl`: game id, start, end, seconds. It's
+    written where `library::record_session` already records time, and goes to whoever started the game.
+  - The log goes in the GitHub backup (`library/portable.rs`). A restore merges by game id and start time, so the
+    same session is never counted twice, and no session from either PC is lost.
+  - No UI in this row.
+- **Done when:** a stand-in game from `W:\games-test`, played twice, leaves two lines in that user's log, and its
+  seconds match the time `play.json` added. Unit tests: an append survives a crash mid-write (no broken line is
+  read back), backup merge doesn't double or drop sessions, and a second user's session lands in their own file.
+- **Owns:** `app/src-tauri/src/library/mod.rs` (record_session), a new `app/src-tauri/src/library/sessions.rs`,
+  `app/src-tauri/src/library/portable.rs`.
+- **Done (2026-11-07), measured:**
+  - On the Avita, a debug build with its own data dir and `Hades` from `W:\games-test` (the 5 s stand-in), played
+    twice from Home with the test pad, left two lines in `users\<id>\sessions.jsonl`:
+    `{"game":"hades","start":1794076117762,"end":1794076122762,"secs":5}` and
+    `{"game":"hades","start":1794076151552,"end":1794076156552,"secs":5}`. `play.json` went from 0 to 5 to 10 s and
+    2 sessions; its `firstPlayed` is the first line's start and its `lastPlayed` the second line's end.
+  - Unit tests: `appends_survive_a_crash_mid_write`, `a_backup_merge_never_doubles_or_drops_sessions`,
+    `sessions_add_playtime_and_go_to_the_players_log` (second user, own file), `a_backup_from_before_the_session_log_reads_with_none`.
+    `cargo test --lib --locked`: 95 passed, 12 ignored.
+  - Also touched, outside the owned files: `app/src-tauri/src/cloud/backup.rs` builds the gist, so it now hashes,
+    uploads and restores the log too (merged with what the gist holds, like the games).
+  - For B4: sessions keep the game id they were played under. A game whose id differs between two PCs shows as two
+    ids in a merged log; match by `portable.rs`'s rules if that ever matters. A PC still on 0.3.4 that uploads drops
+    the log from the gist, but the next upload from a PC with B1 puts it back (its own log is merged in).
+
+### Row B2: Display settings per game (shared)
+- **Outcome:**
+  - The Options menu (Menu on a game, `openMenu` in `home.js`) gets "Display for This Game". It offers the modes
+    Settings → Display already lists (resolution and refresh rate, `system/display.rs`), HDR on/off, and "Use PC
+    Setting", the default.
+  - At launch, the profile's mode and HDR are applied as a temporary change (not saved to the registry). When the
+    session ends, the display goes back to what it was before. If Padwake restarts during a game, it puts the saved
+    display back at its next start.
+  - The game hub shows the profile in one line when the game has one ("1280 × 720 · 60 Hz · HDR on").
+  - Profiles are stored with the shared settings (`settings/mod.rs`), keyed by game id.
+- **Done when:** on the Avita, a stand-in with a 1280 × 720 profile runs at that mode, and quitting brings back the
+  previous mode within 2 s. Killing Padwake mid-game and starting it again restores the previous mode too. Unit
+  tests: a profile for a mode the monitor no longer offers is skipped, not applied.
+- **Owns:** `app/src-tauri/src/system/display.rs`, `app/src-tauri/src/games/mod.rs` (launch and end),
+  `app/src-tauri/src/settings/mod.rs`, the Options menu entry and its picker in `app/ui/home/home.js`.
+
+### Row B3: Collections and smart lists
+- **Outcome:**
+  - The Game Library gets a "Lists" tab beside Your Collection and Journal. It shows a grid of list tiles: smart
+    lists first, then yours, then "New List". A opens a list as the usual cover grid; Menu there renames or deletes
+    your list.
+  - Smart lists, for whoever is playing, worked out every time and hidden when empty:
+    - Playing (journal status Playing)
+    - Never Played (no sessions)
+    - Finished (status Finished or Completed)
+    - Paused (status Paused)
+    - Short Games (HowLongToBeat main story ≤ 10 h, `hltb_main_sec`)
+    - Not Played in 3 Months (last played over 90 days ago, not Finished, Completed or Dropped)
+  - Your own lists are shared by everyone on the PC, kept in `data\collections.json`. Options on a game gets "Add to
+    List…", which ticks lists on and off and can make a new one with the on-screen keyboard.
+- **Done when:** a new UI probe check (`tools/app/checks/lists.json`, mock data) passes. It covers each smart list
+  with seeded games, making, renaming and deleting a list, adding a game from Options, and two users seeing
+  different smart lists but the same own lists. Plus a screenshot of the Lists tab on the Avita.
+- **Owns:** `app/ui/library/library.js` (tab), a new `app/ui/library/lists.js` and its CSS, "Add to List…" in
+  `app/ui/home/home.js`, a new `app/src-tauri/src/library/collections.rs`, `tools/app/checks/lists.json`.
+
+### Row B4: Monthly and yearly recap (each user's)
+- **Outcome:**
+  - From B1's log: hours and sessions, top 3 games by time (with art), longest session, busiest weekday and time of
+    day, games started for the first time, Padwake trophies earned in the period, and one screenshot from it
+    (captures carry their date in the file name).
+  - Trophies earned in a period come from replaying the log: a game's totals at a date are today's totals minus
+    the sessions logged after it. No trophy dates are stored.
+  - Full-screen pages: Left / Right or LB / RB to step through, B to close. Reached from the Journal tab ("Recaps":
+    "This month so far", then every past month with a session, then years).
+  - On the first Home of a new month, a notice: "Your November recap is ready." The yearly one comes on 1 January.
+    Months with no sessions get no notice.
+- **Done when:** a UI probe check (`tools/app/checks/recap.json`, a mock log covering two months and two users)
+  shows the right numbers on every page, gives the notice once, and shows nothing from before the log began. Unit
+  tests for the totals-at-a-date replay. Plus screenshots of each page on the Avita.
+- **Owns:** a new `app/ui/journal/recap.js` and its CSS, the Recaps entry in `app/ui/library/journal.js`, the
+  notice in `app/ui/control-center/notices.js`, reading the log in `app/src-tauri/src/library/sessions.rs`,
+  `tools/app/checks/recap.json`.
+
+### Row B5: PS5-feel polish pass
+- **Outcome:**
+  - First, screenshot every screen at 1080p (Home, a game hub, Library, Journal, Search, Settings, Control Center,
+    gallery, launch screen and recap). Compare them with `ch-night/design/ps5/` and pick up to 5 fixes that make it
+    feel more like a console. Ideas to weigh, if they aren't already there: Home's tint following the focused game's
+    art, more depth when entering a game hub, and a hold-to-confirm ring on Close Game.
+  - Motion only on transform and opacity. Our own sounds and icons only.
+- **Done when:** before and after screenshots of each fix are in the row, every UI probe check in `DEVELOPMENT.md`
+  still passes, and the keypress-to-first-frame median and Home idle CPU/GPU stay within 10 % of
+  `docs/performance.md`.
+- **Owns:** whatever `app/ui/**` files the chosen fixes touch. Runs last, alone.
