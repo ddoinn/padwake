@@ -116,13 +116,30 @@ Decisions (2026-11-08, Madhav: "log everything you can so that we can make detai
     keeping the new session's open file. `cargo test --lib --locked`: 111 passed, 13 ignored, no warnings.
   - UI probes: every check in `DEVELOPMENT.md` passes, including the new `play-log.json` (8 checks).
     `gallery.json` fails with its documented `captures=9` query on the base too; it passes with `scene=home`.
-  - Not measured: running-game CPU and Home idle cost against `docs/performance.md`. The added work is
-    a foreground hook and a 500 ms one-shot timer per focus change, plus one idle check and one small file write per
-    minute while a game runs. The final live re-run after the review fixes wasn't done either. After the 2026-11-09
-    laptop reset, Padwake can't be built or run on a visible desktop from the agent's shell.
-  - Found, not fixed: about 20 ms after the "Ready to play" toast (`system/toast.rs`), Windows moves focus from the
-    game back to the window that was in front before. This happens without B1b too, but it makes "another app"
-    time count up. On the Avita, idle stays 0 because a phantom keyboard key keeps resetting the idle timer.
+- **Done (2026-11-09), final run after the rebase onto #1 and #2:**
+  - The re-run found a hole: about 10 ms after the "Ready to play" toast shows, Windows hands the foreground to the
+    app's hidden window (and sometimes first to the window in front before the game). After that, Windows sends no
+    foreground event when focus goes back to the game, so an alt-tab could go unseen. Seen in the session log
+    as a 55 s alt-tabbed session with `"other":0`.
+  - Fix (`games/mod.rs`, `came_to_front`): our own window coming to the front while the game is up and the app
+    asleep is an accident, so the app hands the foreground straight back to the game (logged as "our window took
+    the front over the game: given back"). That also gives the game its keyboard back.
+  - Release build of the rebased head, own data dir, test pad, `Stand-in Long`, run in the desktop session through a
+    one-shot scheduled task (the agent shell is session 0):
+    - Close Game: `"secs":19,"ended":"close","launchMs":331,"front":{"game":10,"home":0,"controlCenter":9,
+      "other":0},"guide":1,"cpuMs":281,"peakMb":26`. The log: 9.7 s game, then 9.0 s Control Center.
+    - Alt-tabbed and back, then the game quit: `"secs":48,"ended":"quit","front":{"game":26,"controlCenter":0,
+      "other":22}`, `"trophies":["first-steps"]`. A separate foreground-event listener saw the other window
+      from 22:49:04.292 to 22:49:26.521 (22.2 s); Padwake logged 22:49:04.293 and 22:49:26.525.
+    - `events.jsonl`: `started` (`"restarted":false`) and `stopped` on a clean close. The open-session file is gone.
+  - Cost against `docs/performance.md` (release, 8 logical cores, 60 Hz, test pad, no XInput pad):
+    - Home idle: 0.0575% of the PC, GPU 0.006% average (baseline 0.0830%, 0.006%). One earlier sample read 0.0945%;
+      the other was 0.0575%. B1b adds no work on Home but a hook that waits for focus changes.
+    - While a game runs (10 s after launch, before the fix): 0.0508% of the PC, GPU 0.000% (baseline 0.0576%,
+      0.000%). The fix runs once per accidental focus change, never on a timer.
+  - `cargo test --lib --locked` on the rebased head: 125 passed, 14 ignored, no warnings. UI probes: all 13 lines in
+    `DEVELOPMENT.md` pass, `gallery.json` only with `scene=home` (its documented query fails on `main` too).
+  - On the Avita, idle stays 0 because a phantom keyboard key keeps resetting the idle timer.
 
 ### Row B2: Display settings per game (shared)
 - **Outcome:**

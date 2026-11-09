@@ -576,9 +576,25 @@ fn screenshot_saved(id: &str) {
 /// A window of another process came to the front. The session's first one means the game is up: "Ready to play".
 fn came_to_front<R: Runtime>(app: &AppHandle<R>, hwnd: isize, pid: u32) {
     if pid == unsafe { GetCurrentProcessId() } {
-        // our own window back in front (only the re-read sees it): over the game, the screen it shows
-        if let Some(l) = live().as_mut().filter(|l| l.front == Front::App) {
-            l.clock.to(l.over, Instant::now());
+        // our own window in front: over the game, the screen it shows
+        let give_back = {
+            let mut live = live();
+            let Some(l) = live.as_mut() else { return };
+            if l.front == Front::App {
+                l.clock.to(l.over, Instant::now());
+                return;
+            }
+            // while the game is up and the app asleep, our window comes to the front only by accident: Windows hands
+            // it the foreground a moment after the "Ready to play" toast shows. Give it back to the game, or the game
+            // loses its keyboard and later focus changes go unreported.
+            if !l.ready {
+                return;
+            }
+            l.tracked.main_window(l.window)
+        };
+        if let Some(w) = give_back {
+            log("our window took the front over the game: given back");
+            window::bring_to_front(w);
         }
         return;
     }
