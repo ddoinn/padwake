@@ -19,6 +19,9 @@
 //!   CPU and memory, pad, display and power at start and end, Guide opens, screenshots, trophies and achievements.
 //!   The slow reads (pads, display, achievement files) run on the waiter thread, before the wait and after Home is
 //!   back. While it runs, the line so far is saved once a minute, so a Padwake restart still logs it.
+//! - Row B2: a game with a display profile (settings `displayProfiles`) gets its mode and HDR before it starts, and
+//!   the PC's come back as the session ends, before Home shows (`system/display.rs`), or at the next start if Padwake
+//!   stopped mid-game. The line's display at the end is the one the game ran at, read just before it was put back.
 
 mod backdrop;
 mod capture;
@@ -157,6 +160,10 @@ pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("games")
         .invoke_handler(tauri::generate_handler![launch, close, resume, session, backdrop, over_ready, captures, delete_capture, screen])
         .setup(|app, _api| {
+            // Padwake stopped while a game ran with its own display (row B2): the PC's display comes back
+            if crate::system::restore_display_profile().is_some() {
+                log("a game's display was still on from before Padwake stopped: put back");
+            }
             let app = app.clone();
             front::start(move |hwnd, pid| came_to_front(&app, hwnd, pid));
             Ok(())
@@ -490,7 +497,7 @@ fn last_input(now: u64) -> u64 {
 /// On the waiter thread as the session starts, off the launch path: the PC as it started and the game's achievements
 /// (`game`: None for media), then the line so far is saved, and again once a minute (idle, and for a restart).
 fn begin(started: Instant, game: Option<&str>) {
-    let snapshot = stats::snapshot(crate::input::last_pad());
+    let snapshot = stats::snapshot(crate::input::last_pad(), None);
     let achievements = game.and_then(crate::library::unlocked);
     let mut guard = live();
     let Some(l) = guard.as_mut().filter(|l| l.started == started) else { return };
@@ -517,6 +524,8 @@ fn begin(started: Instant, game: Option<&str>) {
 fn end<R: Runtime>(app: &AppHandle<R>) {
     let Some(mut l) = live().take() else { return };
     let (now, ended_at) = (Instant::now(), now_ms());
+    // the PC's display back before Home shows (row B2), and the mode the game ran at for the log line
+    let ran = crate::system::restore_display_profile();
     let secs = now.saturating_duration_since(l.started).as_secs_f64().round() as u64;
     // read while the job's handle is still open
     let usage = l.tracked.usage();
@@ -557,7 +566,7 @@ fn end<R: Runtime>(app: &AppHandle<R>) {
         crate::library::drop_open_session(&l.user, &entry);
         return;
     }
-    entry.at_end = Some(stats::snapshot(crate::input::last_pad()));
+    entry.at_end = Some(stats::snapshot(crate::input::last_pad(), ran));
     if l.kind == Kind::Game {
         if let (Some(before), Some(after)) = (l.achievements, crate::library::unlocked(&l.id)) {
             entry.achievements = Some([before, after]);
@@ -639,7 +648,18 @@ fn came_to_front<R: Runtime>(app: &AppHandle<R>, hwnd: isize, pid: u32) {
 async fn launch<R: Runtime>(app: AppHandle<R>, id: String, from: Option<String>) -> Result<(), String> {
     let game = crate::library::get(&id).ok_or_else(|| format!("no game {id}"))?;
     let (how, appear) = how_to_start(&game)?;
-    start(&app, Kind::Game, &id, &game.name, how, Some(game.folder.clone()), appear, launched_from(from))
+    // row B2: the game's display before it starts, so it opens at that mode; put back when the session ends
+    let profile = crate::settings::display_profile(&id).filter(|_| !is_running());
+    if let Some(p) = &profile {
+        if let Err(e) = crate::system::apply_display_profile(p) {
+            log(&format!("{id}'s display profile: {e}"));
+        }
+    }
+    let started = start(&app, Kind::Game, &id, &game.name, how, Some(game.folder.clone()), appear, launched_from(from));
+    if started.is_err() && profile.is_some() {
+        crate::system::restore_display_profile();
+    }
+    started
 }
 
 /// The launcher's link (and the wait for the game), or the exe with the store's arguments.

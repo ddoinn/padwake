@@ -86,6 +86,8 @@ let index = 0;
 let zone = 'row';             // row | top | hub1 | hub2 | viewer | menu | info | busy
 let topIndex = 0, heroIndex = 0, cardIndex = 0, menuIndex = 0;
 let menuFrom = 'row', menuItems = [], cards = [], hubGame = null;
+let menuBack = null;          // B in a sub-menu: back to the menu it came from (else B closes)
+let profiles = {};            // row B2: settings.displayProfiles, {id: {mode: {width, height, hz}, hdr}} (missing: the PC's)
 let running = null;           // the running game's id ('game' events)
 let switchTo = null;          // the game to start once the running one has closed (askSwitch)
 let cameFrom = null;          // {id, from}: the Library or Search opened Home on this game (the session log's "from")
@@ -121,7 +123,7 @@ export default {
           <div class="label"><span></span><span></span></div>
         </div>
         <div class="preview"><div class="pcount"><span></span><span></span></div><div class="pgrid"></div></div>
-        <div class="hubhead"><div class="icon"></div><div class="title"></div></div>
+        <div class="hubhead"><div class="icon"></div><div class="title"></div><div class="disp"></div></div>
         <div class="content">
           <div class="herowrap"><div class="hero">
             <div class="hero-text"><div class="logo"></div><div class="tagline"></div></div>
@@ -151,6 +153,8 @@ export default {
     users.ready.then(drawUser);
 
     host.on('library', list => setGames(list));
+    host.on('settings', s => { profiles = s?.displayProfiles ?? {}; drawProfile(); });
+    Promise.resolve(host.settings.get()).then(s => { profiles = s?.displayProfiles ?? {}; drawProfile(); }).catch(() => {});
     host.on('game', gameEvent);
     host.on('media', list => { media = list ?? []; if (tab === 'media') setItems(); });
     document.addEventListener('visibilitychange', () => {
@@ -904,6 +908,7 @@ function prepareSoon(it) {
 
 function prepareHub(g) {
   hubGame = g;
+  drawProfile();
   if (preparedFor === g) return;
   preparedFor = g;
   $.hubhead.querySelector('.title').textContent = g.name;
@@ -1390,36 +1395,44 @@ function endViewer() {
 }
 
 // ---------- Options menu (☰ / •••) and Information ----------
-function openMenu(from) {
+function openMenu(from, focus = 0) {
   const g = from === 'row' ? focusedGame() : hubGame;
   if (!g) return false;
   menuItems = [
     ...(from === 'row' ? [['Game hub', () => { closeMenu(); enterHub1(); }]] : []),
     ['Information', () => showInfo(g)],
     ['Journal', () => { closeMenu(); app.push('journal', { id: g.id }); }],
+    ['Display for This Game', () => displayMenu(g)],
     ['Refresh art', () => { closeMenu(); host.library.refresh?.(g.id).catch(e => console.warn('refresh', e)); }],
     ...(running === g.id ? [['Close Game', () => { closeMenu(); host.games.close?.(g.id).catch(e => console.warn('close', e)); }]] : []),
   ];
-  return showMenu(from);
+  return showMenu(from, null, { focus });
 }
 
-// the menu's items (menuItems) under an optional heading that can't be focused
-function showMenu(from, head = null) {
+// the menu's items (menuItems: [label, action, chosen]) under an optional heading that can't be focused. `back`: what B
+// does instead of closing (a sub-menu goes back to its menu). A list longer than the screen has room for scrolls a
+// whole item at a time with the focus, under the heading.
+const MENU_ITEM = 80, MENU_HEAD = 54, MENU_PAD = 20;
+function showMenu(from, head = null, { back = null, focus = 0 } = {}) {
   menuFrom = from;
-  const items = menuItems.map(([label], i) => {
+  menuBack = back;
+  const list = Object.assign(document.createElement('div'), { className: 'list' });
+  list.append(...menuItems.map(([label, , chosen], i) => {
     const el = document.createElement('div');
-    el.className = 'item';
+    el.className = chosen ? 'item chosen' : 'item';
     el.dataset.nav = `menu:${i}`;
     el.textContent = label;
     return el;
-  });
-  if (head) items.unshift(Object.assign(document.createElement('div'), { className: 'head', textContent: head }));
-  $.menu.replaceChildren(...items);
+  }));
+  $.menu.replaceChildren(...(head ? [Object.assign(document.createElement('div'), { className: 'head', textContent: head })] : []), list);
   // next to what it is for: under the focused tile's label, or beside •••
+  const top = from === 'row' ? 318 : from === 'hub1' ? 836 - HUB_LIFT : from === 'top' ? 140 : 318;
   $.menu.style.left = from === 'row' ? '172px' : from === 'top' ? '1194px' : '611px';
-  $.menu.style.top = from === 'row' ? '318px' : from === 'hub1' ? `${836 - HUB_LIFT}px` : from === 'top' ? '140px' : '318px';
+  $.menu.style.top = `${top}px`;
+  const rows = Math.max(1, Math.floor((1040 - top - MENU_PAD - (head ? MENU_HEAD : 0)) / MENU_ITEM));
+  list.style.maxHeight = `${rows * MENU_ITEM}px`;
   zone = 'menu';
-  menuSelect(0);
+  menuSelect(focus);
   setStyle($.menu, 'opacity', 1, 6 * FRAME, EASE_OUT, 0);
   $.menu.style.visibility = 'visible';
   return true;
@@ -1428,10 +1441,15 @@ function showMenu(from, head = null) {
 function menuSelect(i) {
   menuIndex = Math.max(0, Math.min(menuItems.length - 1, i));
   [...$.menu.querySelectorAll('.item')].forEach((el, k) => el.classList.toggle('focus', k === menuIndex));
+  const list = $.menu.querySelector('.list');
+  const rows = Math.round(list.clientHeight / MENU_ITEM), first = Math.round(list.scrollTop / MENU_ITEM);
+  if (menuIndex < first) list.scrollTop = menuIndex * MENU_ITEM;
+  else if (menuIndex >= first + rows) list.scrollTop = (menuIndex - rows + 1) * MENU_ITEM;
 }
 
 function closeMenu() {
   zone = menuFrom;
+  menuBack = null;
   setStyle($.menu, 'opacity', 0, 4 * FRAME, EASE_OUT);
   $.menu.style.visibility = 'hidden';
   return true;
@@ -1448,8 +1466,69 @@ function menuAction(name, e) {
   if (name === 'point' && e.target?.startsWith('menu:')) { const i = +e.target.slice(5); if (i === menuIndex) return false; menuSelect(i); return true; }
   if (name === 'click' && e.target?.startsWith('menu:')) { menuSelect(+e.target.slice(5)); name = 'a'; }
   if (name === 'a') { menuItems[menuIndex][1](); return true; }
+  if (name === 'b' && menuBack) { menuBack(); return true; }
   if (name === 'b' || name === 'menu' || name === 'click') return closeMenu();
   return false;
+}
+
+// ---------- Display for This Game (row B2) ----------
+// A game's own resolution, refresh rate and HDR, from the modes Settings → Display lists. The host applies them as the
+// game starts (not saved) and puts the PC's back when it ends (src-tauri/src/system/display.rs). Shared, like settings.
+const modeText = m => `${m.width} × ${m.height} · ${m.hz} Hz`;
+const sameMode = (a, b) => !!a && !!b && a.width === b.width && a.height === b.height && a.hz === b.hz;
+
+// "1280 × 720 · 60 Hz · HDR on", or '' for a game on the PC's settings
+function profileText(p) {
+  return [p?.mode && modeText(p.mode), p?.hdr != null && `HDR ${p.hdr ? 'on' : 'off'}`].filter(Boolean).join(' · ');
+}
+
+// the hub's line under the game's name
+function drawProfile() {
+  if (!$.hubhead) return;
+  const text = hubGame ? profileText(profiles[hubGame.id]) : '';
+  $.hubhead.querySelector('.disp').textContent = text;
+  $.hubhead.classList.toggle('two', !!text);
+}
+
+async function saveProfile(g, p) {
+  const all = { ...profiles };
+  if (p?.mode || p?.hdr != null) all[g.id] = { ...(p.mode ? { mode: p.mode } : {}), ...(p.hdr != null ? { hdr: p.hdr } : {}) };
+  else delete all[g.id];
+  profiles = all;
+  drawProfile();
+  await host.settings.set({ displayProfiles: all }).catch(e => console.warn('display profile', e));
+}
+
+let display = null; // the display's modes and HDR, read as the menu opens
+async function displayMenu(g, focus = 0) {
+  const from = menuFrom;
+  display = await Promise.resolve(host.system.display()).catch(() => display);
+  if (zone !== 'menu' || menuFrom !== from) return;
+  const p = profiles[g.id] ?? {};
+  menuItems = [
+    [`Resolution: ${p.mode ? modeText(p.mode) : 'Use PC Setting'}`, () => modeMenu(g)],
+    // HDR only where the display has it; HDR saved on another display still shows, so it can be changed
+    ...(display?.hdr?.supported || p.hdr != null ? [[`HDR: ${p.hdr == null ? 'Use PC Setting' : p.hdr ? 'On' : 'Off'}`, () => hdrMenu(g)]] : []),
+    ...(profileText(p) ? [['Use PC Setting', () => saveProfile(g, null).then(() => displayMenu(g))]] : []),
+  ];
+  showMenu(from, 'Display for This Game', { back: () => openMenu(from, from === 'row' ? 3 : 2), focus });
+}
+
+function modeMenu(g) {
+  const p = profiles[g.id] ?? {};
+  const modes = display?.modes ?? [];
+  const pick = mode => saveProfile(g, { ...p, mode }).then(() => displayMenu(g, 0));
+  menuItems = [['Use PC Setting', () => pick(null), !p.mode], ...modes.map(m => [modeText(m), () => pick(m), sameMode(m, p.mode)])];
+  // a mode this display no longer offers stays listed, so it can be seen and changed; the host skips it at launch
+  if (p.mode && !modes.some(m => sameMode(m, p.mode))) menuItems.push([`${modeText(p.mode)} (not available)`, () => pick(p.mode), true]);
+  return showMenu(menuFrom, 'Resolution and Refresh Rate', { back: () => displayMenu(g, 0), focus: menuItems.findIndex(m => m[2]) });
+}
+
+function hdrMenu(g) {
+  const p = profiles[g.id] ?? {};
+  const pick = hdr => saveProfile(g, { ...p, hdr }).then(() => displayMenu(g, 1));
+  menuItems = [['Use PC Setting', () => pick(null), p.hdr == null], ['On', () => pick(true), p.hdr === true], ['Off', () => pick(false), p.hdr === false]];
+  return showMenu(menuFrom, 'HDR', { back: () => displayMenu(g, 1), focus: menuItems.findIndex(m => m[2]) });
 }
 
 function showInfo(g) {

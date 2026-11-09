@@ -104,8 +104,9 @@ pub fn last_key_or_mouse(now: u64) -> u64 {
     now.saturating_sub(u64::from(ago))
 }
 
-/// The pad, display and power now. `slot` is the pad used last.
-pub fn snapshot(slot: u32) -> Snapshot {
+/// The pad, display and power now. `slot` is the pad used last. `ran`: the display as the session ran, read before
+/// its display profile was put back (row B2); otherwise the display now.
+pub fn snapshot(slot: u32, ran: Option<(crate::system::Mode, bool)>) -> Snapshot {
     use crate::system::Connection;
     let pads = crate::system::pads();
     let pad = pads.iter().find(|p| p.slot == slot).or(pads.first()).map(|p| {
@@ -116,7 +117,7 @@ pub fn snapshot(slot: u32) -> Snapshot {
         };
         pad(link, p.kind, p.level, p.name.clone())
     });
-    let display = crate::system::display_now().map(|(m, hdr)| Display { width: m.width, height: m.height, hz: m.hz, hdr });
+    let display = ran.or_else(crate::system::display_now).map(|(m, hdr)| Display { width: m.width, height: m.height, hz: m.hz, hdr });
     let mut st = SYSTEM_POWER_STATUS::default();
     let power = unsafe { GetSystemPowerStatus(&mut st) }.ok().and_then(|_| power(st.ACLineStatus, st.BatteryFlag, st.BatteryLifePercent));
     Snapshot { pad, display, power }
@@ -217,7 +218,7 @@ mod tests {
     #[test]
     #[ignore = "real PC: reads this PC's pad, display and power"]
     fn real_snapshot() {
-        let s = snapshot(0);
+        let s = snapshot(0, None);
         println!("{}", serde_json::to_string(&s).unwrap());
         assert!(s.display.is_some() && s.power.is_some());
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
