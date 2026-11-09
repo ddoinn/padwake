@@ -99,6 +99,30 @@ Decisions (2026-11-08, Madhav: "log everything you can so that we can make detai
 - **Owns:** `app/src-tauri/src/library/{sessions,events,jsonl}.rs`, `games/{mod,stats,session,front}.rs`, the backup
   (`library/portable.rs`, `cloud/backup.rs`). `from` and the top-screen report in `app/ui/{app,host}.js`,
   `home/home.js`, `library/library.js`, `search/search.js`.
+- **Done (2026-11-08), measured:**
+  - On the Avita, a debug build with its own data dir, the test pad and `Stand-in Long` from `W:\games-test`
+    (before the review fixes) logged, in `users\<id>\sessions.jsonl`:
+    - Close Game: `"from":"home","ended":"close","launchMs":164,"front":{"game":10,"home":0,"controlCenter":8,
+      "other":0},"cpuMs":187,"peakMb":25,"guide":1`, display `1920×1080@60`, HDR off, `"power":{"ac":true}`.
+    - Alt-tabbed: `"secs":43,"ended":"quit","front":{"game":11,"controlCenter":3,"other":28}`. This matches the
+      Padwake log's timestamps (6.6 s game, 28.2 s other app, 3 s Control Center, 4.6 s game). The Stand-in Long
+      line `"trophies":["first-steps"]` matches `play.json` going from 39 to 82 s.
+    - A screenshot during a session: `"screenshots":1`.
+    - Padwake killed mid-game, then started again: one line `"ended":"restart","secs":60`. `play.json` went from
+      82 to 142 s and 4 sessions, and the open-session file was removed.
+    - `events.jsonl`: `started` (with `restarted`) and `stopped` on a clean close.
+    - No `pad` fields: the test pad isn't XInput. No battery fields: the Avita reports no system battery.
+  - Unit tests cover every field, the backup merge of events, restart recovery counted exactly once, and Switch Game
+    keeping the new session's open file. `cargo test --lib --locked`: 111 passed, 13 ignored, no warnings.
+  - UI probes: every check in `DEVELOPMENT.md` passes, including the new `play-log.json` (8 checks).
+    `gallery.json` fails with its documented `captures=9` query on the base too; it passes with `scene=home`.
+  - Not measured: running-game CPU and Home idle cost against `docs/performance.md`. The added work is
+    a foreground hook and a 500 ms one-shot timer per focus change, plus one idle check and one small file write per
+    minute while a game runs. The final live re-run after the review fixes wasn't done either. After the 2026-11-09
+    laptop reset, Padwake can't be built or run on a visible desktop from the agent's shell.
+  - Found, not fixed: about 20 ms after the "Ready to play" toast (`system/toast.rs`), Windows moves focus from the
+    game back to the window that was in front before. This happens without B1b too, but it makes "another app"
+    time count up. On the Avita, idle stays 0 because a phantom keyboard key keeps resetting the idle timer.
 
 ### Row B2: Display settings per game (shared)
 - **Outcome:**
