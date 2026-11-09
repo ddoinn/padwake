@@ -18,6 +18,16 @@ install the "Evergreen" runtime from Microsoft's WebView2 page.
 - A folder you copy in joins the row once nothing in it has changed for 3 minutes. A folder you delete leaves.
 - No scanning happens while a game runs.
 
+### Games from Steam, Epic Games, GOG, Xbox and the EA app
+
+- Games you install with Steam, Epic Games, GOG Galaxy, the Xbox app (PC Game Pass included) or the EA app join
+  the library by themselves, wherever they are installed. Uninstall one and it leaves; the journal keeps its time.
+- Steam, Epic and Xbox games start through their launcher, so it opens first if it isn't running. GOG and EA games
+  start from their own program. Padwake waits up to 2 minutes for the launcher to start the game; **Close Game**
+  stops waiting.
+- Only installed games join. Games you own but haven't installed stay in the store's app.
+- Turn a store off in **Settings → Library → Stores** to keep its games out of the library.
+
 ## 3. Art and trailers
 
 - **Art** comes from SteamGridDB. Make a free account at steamgriddb.com, copy your API key from Preferences → API,

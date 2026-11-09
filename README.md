@@ -17,7 +17,7 @@ Built with **Rust + Tauri**. Blazing-fast navigation. Made for a controller.
 ## Your PC, with a console feel
 
 - **PS5-inspired navigation.** A game row, full-screen artwork, spring motion, game hubs and a Guide-button Control Center.
-- **Your games, in one place.** Pick a folder. Padwake finds games, fetches artwork, screenshots and trailers, and tracks playtime.
+- **Your games, in one place.** Pick a folder, and games you install with Steam, Epic Games, GOG, Xbox or the EA app join too. Padwake fetches artwork, screenshots and trailers, and tracks playtime.
 - **Get straight to playing.** Launch a game; the window hides and WebView2 suspends. Quit the game and your library comes back.
 - **Everything on the controller.** Search, an on-screen keyboard, volume, display settings, power controls, mouse mode and a live button test.
 - **Everyone gets their own.** Add a user for each person who plays. "Who's using this controller?" asks at start, and each user keeps their own time played, Journal, trophies, screenshots and backup. Games and settings are shared.

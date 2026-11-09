@@ -1,0 +1,22 @@
+[
+  {"wait": 900},
+  {"assert": "__mock.library.filter(g => g.store).length === 5", "why": "?stores=1: five store games after the folders"},
+  {"assert": "[...document.querySelectorAll('#screen-settings .srow')].map(e => e.textContent).filter(t => /^(Steam|Epic Games|GOG|Xbox|EA app)/.test(t)).length === 5", "why": "Library › Stores has a toggle per store"},
+  {"assert": "[...document.querySelectorAll('#screen-settings .srow')].some(e => e.textContent.includes('1 game installed with Steam.'))", "why": "each says how many of its games are in the library"},
+  {"assert": "document.querySelectorAll('#screen-settings .srow .tog.on').length === 5", "why": "every store is on at first"},
+  {"shot": "stores-settings"},
+  {"key": "Enter"}, {"wait": 400},
+  {"assert": "JSON.stringify(__mock.settings.storesOff) === '[\"steam\"]' && document.querySelectorAll('#screen-settings .srow .tog.on').length === 4", "why": "A on Steam turns it off"},
+  {"assert": "!__mock.library.some(g => g.id === 'portal-2') && __mock.library.some(g => g.id === 'halo-infinite')", "why": "Steam's games leave the library, the others stay"},
+  {"assert": "[...document.querySelectorAll('#screen-settings .srow')].some(e => e.textContent.includes('Games installed with Steam stay out of your library.'))", "why": "the row says Steam's games stay out"},
+  {"shot": "stores-steam-off"},
+  {"key": "Enter"}, {"wait": 400},
+  {"assert": "__mock.library.some(g => g.id === 'portal-2') && document.querySelectorAll('#screen-settings .srow .tog.on').length === 5", "why": "A again brings them back"},
+  {"eval": "__app.go('home', {focus: 'halo-infinite'}).then(() => __home.state().item)"},
+  {"wait": 900},
+  {"assert": "__home.state().item === 'halo-infinite'", "why": "a store game is on Home like any other"},
+  {"key": "m"}, {"wait": 300},
+  {"key": "ArrowDown"}, {"wait": 100}, {"key": "Enter"}, {"wait": 500},
+  {"assert": "/Store\\s*Xbox/.test(document.querySelector('#screen-home .info').textContent) && document.querySelector('#screen-home .info').textContent.includes('XboxGames')", "why": "Information names the store and its folder"},
+  {"shot": "stores-info"}
+]
