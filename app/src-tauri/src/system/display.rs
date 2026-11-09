@@ -407,7 +407,8 @@ pub fn plan(profile: &Profile, current: Mode, hdr: Hdr, modes: &[Mode]) -> Profi
     }
 }
 
-/// What a profile changed, to put back: the display's mode and HDR from before, each only if it was changed.
+/// What to put back after a game with a profile: the display's mode from before (always: HDR may move it), and HDR if
+/// the profile changed it.
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct Restore {
     device: String,
@@ -449,22 +450,27 @@ pub fn apply_profile(profile: &Profile) -> Result<(), String> {
     if todo == Profile::default() {
         return Ok(());
     }
-    let saved = Restore { device, mode: todo.mode.map(|_| now), hdr: todo.hdr.map(|_| before.enabled) };
+    // the mode is always kept to put back: switching HDR may reset it
+    let saved = Restore { device, mode: Some(now), hdr: todo.hdr.map(|_| before.enabled) };
     let text = serde_json::to_vec(&saved).map_err(|e| e.to_string())?;
     std::fs::write(restore_file(), text).map_err(|e| format!("display-restore.json: {e}"))?;
     let mut result = Ok(());
-    if let Some(m) = todo.mode {
-        result = apply(&dev, &base, m, CDS_TYPE(0));
-        match &result {
-            Ok(()) => log(&format!("display: this game's {} (was {})", describe(m), describe(now))),
-            Err(e) => log(&format!("display: this game's mode: {e}")),
-        }
-    }
+    // HDR first, then the mode: the game's mode, or the PC's for an HDR-only profile (if HDR moved it)
     if let Some(on) = todo.hdr {
         if let Err(e) = set_hdr(on) {
             log(&format!("display: this game's HDR: {e}"));
-            result = result.and(Err(e));
+            result = Err(e);
         }
+    }
+    let want = todo.mode.unwrap_or(now);
+    let base = if todo.hdr.is_some() { current(&dev)? } else { base };
+    if mode_of(&base) != want {
+        let applied = apply(&dev, &base, want, CDS_TYPE(0));
+        match &applied {
+            Ok(()) => log(&format!("display: this game's {} (was {})", describe(want), describe(now))),
+            Err(e) => log(&format!("display: this game's mode: {e}")),
+        }
+        result = result.and(applied);
     }
     result
 }
