@@ -324,7 +324,7 @@ function gridAction(name, e) {
 function open(i) {
   const g = games[i];
   if (!g) return false;
-  app.go('home', { focus: g.id });
+  app.go('home', { focus: g.id, from: 'library' });
   return true;
 }
 

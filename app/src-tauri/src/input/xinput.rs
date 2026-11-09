@@ -1,5 +1,5 @@
 use serde::Serialize;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager, Runtime};
@@ -61,6 +61,18 @@ pub struct Pad {
 }
 
 static LAST_PAD: AtomicU32 = AtomicU32::new(0);
+/// When the pad state last changed (any pad, or the test pad), as Unix ms: the session log's idle check (row B1b).
+static LAST_CHANGE: AtomicU64 = AtomicU64::new(0);
+
+/// The slot of the pad used last.
+pub fn last_pad() -> u32 {
+    LAST_PAD.load(Ordering::Relaxed)
+}
+
+/// When any pad's buttons or sticks last moved, as Unix ms (0: not since the start).
+pub fn last_change() -> u64 {
+    LAST_CHANGE.load(Ordering::Relaxed)
+}
 static RUMBLE_UNTIL: Mutex<Option<(u32, Instant)>> = Mutex::new(None);
 
 pub fn rumble(strength: f32, ms: u32) {
@@ -263,6 +275,10 @@ fn run<R: Runtime>(app: AppHandle<R>, get: GetState) {
             if shown && (pad != last || !was_shown) {
                 let _ = app.emit("input", pad);
             }
+        }
+        if pad != last {
+            let ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64);
+            LAST_CHANGE.store(ms, Ordering::Relaxed);
         }
         last = pad;
         was_shown = shown && !taken;

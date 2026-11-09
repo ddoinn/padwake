@@ -308,6 +308,14 @@ pub fn info() -> Result<Display, String> {
     Ok(Display { device, name, current, modes, hdr, trial: state().trial.is_some() })
 }
 
+/// The primary display's mode and whether HDR is on, without listing its modes (the session log, row B1b).
+pub fn now() -> Option<(Mode, bool)> {
+    let dev = primary().ok()?;
+    let mode = mode_of(&current(&dev).ok()?);
+    let hdr = target_for(&wide(&dev)).map(|t| hdr(&t).enabled).unwrap_or(false);
+    Some((mode, hdr))
+}
+
 struct Trial {
     device: DeviceName,
     saved: DEVMODEW,

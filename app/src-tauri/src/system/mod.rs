@@ -20,7 +20,8 @@ use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
 pub use audio::{AudioOutput, Volume};
 pub use display::{Display, Mode};
 pub use network::{Net, Wifi};
-use pads::PadBattery;
+pub use display::now as display_now;
+pub use pads::{pads, Connection, PadBattery};
 pub use toast::{overlay_toast, raise_toasts, without_toasts};
 
 pub fn plugin<R: Runtime>() -> TauriPlugin<R> {

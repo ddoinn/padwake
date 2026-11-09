@@ -46,7 +46,8 @@ export const host = {
   },
   // Game sessions (rows A1, A5). One at a time; the app sleeps while the game is in front.
   games: {
-    launch: id => call('games', 'launch', { id }),
+    // from: where the player launched it (home | library | search | switch), for their session log
+    launch: (id, from) => call('games', 'launch', { id, from }),
     close: id => call('games', 'close', { id }),  // like its X, then ended after 5 s; resolves after that; `game` exited follows
     resume: () => call('games', 'resume'),        // back to the running game: it comes to the front and the app sleeps
     session: () => call('games', 'session'),      // {id, kind, name, front: 'game' | 'app', startedAt, ready} or null
@@ -55,6 +56,7 @@ export const host = {
     // screenshots taken with Guide + View while a game was in front, newest first: [{game, name, path, thumb (480 px), takenAt}]
     captures: () => call('games', 'captures'),
     deleteCapture: path => call('games', 'delete_capture', { path }),
+    screen: id => call('games', 'screen', { id }), // the top screen changed (app.js): over a game, where the time goes
   },
   // A game: {id, name, folder, exe, store (a game installed with a launcher: {name: steam | epic | gog | xbox | ea, id,
   // uri}; null for a folder in the games folder), art: {tile, background, logo, cover}, tagline, description, screenshots[], trailer,
@@ -112,7 +114,7 @@ export const host = {
   media: {
     list: () => call('media', 'list'),
     refresh: () => call('media', 'refresh'),
-    open: id => call('media', 'open', { id }),
+    open: (id, from) => call('media', 'open', { id, from }),
   },
   // Online and free, through GitHub (cloud area): system software updates from the project's releases, and a backup
   // of the library's time and journal in a private gist on the player's own account.
@@ -199,6 +201,8 @@ function mockSyncStores() {
 const mockSettings = { gamesRoot: 'W:\\games-test', rumble: true, uiSounds: true, music: true };
 let mockRunning = null;
 let mockSession = null;
+// what the page told the host for the session log (tools/app/checks/play-log.json): launches with `from`, top screens
+const mockPlayLog = { launches: [], screens: [] };
 function mockExit(id) {
   if (mockRunning !== id) return;
   const g = mockLibrary.find(x => x.id === id);
@@ -345,7 +349,8 @@ const MOCK = {
   media: {
     list: () => mockMedia,
     refresh: () => emit('media', mockMedia),
-    open: ({ id }) => {
+    open: ({ id, from }) => {
+      mockPlayLog.launches.push({ id, from, kind: 'media' });
       const entry = mockMedia.find(m => m.id === id);
       if (!entry) throw new Error(`no media ${id}`);
       if (mockRunning === id && mockSession.kind === 'media') { mockSession.front = 'game'; return null; }
@@ -363,8 +368,9 @@ const MOCK = {
   games: {
     // the real host hides the window while the game runs; here the game "runs" for ?gameMs= (default 3 s)
     // ?gameMs=0 keeps it running until close; a running game ends with playtime and last played, as the real host's
-    launch({ id }) {
+    launch({ id, from }) {
       if (!mockLibrary.some(g => g.id === id)) throw new Error(`no game ${id}`);
+      mockPlayLog.launches.push({ id, from });
       if (mockRunning) throw new Error(`${mockRunning} is already running`);
       mockRunning = id;
       mockSession = { id, startedAt: Date.now(), front: 'game' };
@@ -382,6 +388,7 @@ const MOCK = {
     },
     resume: () => { if (!mockRunning) throw new Error('nothing is running'); mockSession.front = 'game'; return null; },
     over_ready: () => null,
+    screen: ({ id }) => { mockPlayLog.screens.push(id); return null; },
     session: () => (mockRunning ? { id: mockRunning, kind: mockSession.kind ?? 'game', name: mockSession.name ?? mockLibrary.find(g => g.id === mockRunning)?.name, front: mockSession.front, startedAt: mockSession.startedAt, ready: true } : null),
     // a picture standing in for the game's screen
     backdrop: ({ size }) => {
@@ -735,3 +742,4 @@ if (isMock) window.__mock.system = mockSystem; // Settings tests read the power 
 if (isMock) window.__mock.cloud = mockCloud; // update and backup tests
 if (isMock) window.__mock.users = mockUsers; // users tests
 if (isMock) window.__mock.guideOverGame = mockGuideOverGame; // Control Center tests: Guide over a running game
+if (isMock) window.__mock.playLog = mockPlayLog; // the session log's launch places and top screens

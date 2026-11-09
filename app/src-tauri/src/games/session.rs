@@ -16,7 +16,7 @@ use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use windows::core::{BOOL, PCWSTR, PWSTR};
-use windows::Win32::Foundation::{CloseHandle, HANDLE, HWND, INVALID_HANDLE_VALUE, LPARAM, WAIT_TIMEOUT, WPARAM};
+use windows::Win32::Foundation::{CloseHandle, HANDLE, STILL_ACTIVE, HWND, INVALID_HANDLE_VALUE, LPARAM, WAIT_TIMEOUT, WPARAM};
 use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, Thread32First, Thread32Next, PROCESSENTRY32W,
     TH32CS_SNAPPROCESS, TH32CS_SNAPTHREAD, THREADENTRY32,
@@ -28,7 +28,7 @@ use windows::Win32::System::JobObjects::{
     JOBOBJECT_BASIC_ACCOUNTING_INFORMATION, JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_BREAKAWAY_OK,
 };
 use windows::Win32::System::Threading::{
-    GetCurrentProcessId, OpenProcess, OpenThread, QueryFullProcessImageNameW, ResumeThread, TerminateProcess,
+    GetCurrentProcessId, GetExitCodeProcess, OpenProcess, OpenThread, QueryFullProcessImageNameW, ResumeThread, TerminateProcess,
     WaitForMultipleObjects, WaitForSingleObject, CREATE_SUSPENDED, INFINITE, PROCESS_NAME_WIN32,
     PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE, THREAD_SUSPEND_RESUME,
 };
@@ -237,6 +237,46 @@ impl Tracked {
         } else {
             0
         }
+    }
+
+    /// The job's CPU time (ms, all its processes, ended ones too) and peak committed memory (bytes), read once as the
+    /// session ends (row B1b). `None` outside a job; processes outside the job (a relaunched game) aren't counted.
+    pub fn usage(&self) -> Option<(u64, u64)> {
+        if !self.in_job {
+            return None;
+        }
+        let mut basic = JOBOBJECT_BASIC_ACCOUNTING_INFORMATION::default();
+        let mut ext = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+        unsafe {
+            QueryInformationJobObject(
+                Some(self.job.get()),
+                JobObjectBasicAccountingInformation,
+                &mut basic as *mut _ as _,
+                std::mem::size_of_val(&basic) as u32,
+                None,
+            )
+            .ok()?;
+            QueryInformationJobObject(
+                Some(self.job.get()),
+                JobObjectExtendedLimitInformation,
+                &mut ext as *mut _ as _,
+                std::mem::size_of_val(&ext) as u32,
+                None,
+            )
+            .ok()?;
+        }
+        // 100 ns units
+        let cpu_ms = (basic.TotalUserTime + basic.TotalKernelTime).max(0) as u64 / 10_000;
+        Some((cpu_ms, ext.PeakJobMemoryUsed as u64))
+    }
+
+    /// The spawned process's exit code, once it has exited. A launcher stub's code is the stub's, not the game's; a
+    /// game opened by its link (`open`) has none.
+    pub fn exit_code(&self) -> Option<u32> {
+        let child = self.child.as_ref()?;
+        let mut code = 0u32;
+        unsafe { GetExitCodeProcess(child.get(), &mut code) }.ok()?;
+        (code != STILL_ACTIVE.0 as u32).then_some(code)
     }
 
     /// The pids in the job now.
@@ -713,6 +753,21 @@ mod tests {
         let took = waiter.join().unwrap();
         assert!(took < Duration::from_secs(5), "{took:?}");
         assert!(Tracked::open("x://y", PathBuf::from(r"C:\")).is_err(), "a drive root is never tracked");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_finished_session_has_its_exit_code_cpu_and_peak_memory() {
+        let dir = scratch("usage", &["cmd.exe"]);
+        let t = Tracked::spawn(Command::new(dir.join("cmd.exe")).args(["/c", "exit 3"]), Some(dir.clone())).unwrap();
+        t.wait();
+        assert_eq!(t.exit_code(), Some(3), "a crash is a non-zero exit");
+        let (cpu_ms, peak) = t.usage().expect("in a job");
+        assert!(peak > 1 << 20, "cmd committed some memory: {peak}");
+        assert!(cpu_ms < 5_000, "{cpu_ms}");
+        let t = Tracked::spawn(Command::new(dir.join("cmd.exe")).args(["/c", "exit 0"]), None).unwrap();
+        t.wait();
+        assert_eq!(t.exit_code(), Some(0));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

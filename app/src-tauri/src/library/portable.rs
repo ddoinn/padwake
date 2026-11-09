@@ -7,7 +7,9 @@
 //!   time and journal back when a folder of the same name appears in the games folder.
 //! - The session log (`sessions.rs`) goes with it and merges by game id and start time (`sessions::merge`), both on
 //!   restore and on upload, so no session is doubled or dropped.
+//! - So does the event log (`events.rs`, row B1b), merged the same way: an event in both is there once.
 
+pub use super::events::Event;
 pub use super::sessions::Session;
 use super::{Game, Journal};
 use serde::{Deserialize, Serialize};
@@ -28,6 +30,8 @@ pub struct Backup {
     pub games: Vec<Entry>,
     /// the user's session log (`sessions.rs`); a backup from before it has none
     pub sessions: Vec<Session>,
+    /// the user's event log (`events.rs`); a backup from before it has none
+    pub events: Vec<Event>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
@@ -260,9 +264,26 @@ mod tests {
     fn a_backup_from_before_the_session_log_reads_with_none() {
         let b: Backup = serde_json::from_str(r#"{"app":"padwake","format":1,"games":[{"id":"hades","playtimeSec":5}]}"#).unwrap();
         assert_eq!((b.games.len(), b.sessions.len()), (1, 0));
+        assert!(b.events.is_empty());
         let b = Backup { sessions: vec![Session::ended("hades", 5, 9_000)], ..b };
         let back: Backup = serde_json::from_str(&serde_json::to_string(&b).unwrap()).unwrap();
         assert_eq!(back, b);
+    }
+
+    #[test]
+    fn a_backup_carries_the_event_log_and_merges_it_without_doubles() {
+        use super::super::events::{self, What};
+        let started = Event { at: 1_000, what: What::Started { v: "0.3.4".into(), restarted: false } };
+        let rated = Event { at: 2_000, what: What::Rating { game: "hades".into(), rating: Some(5) } };
+        let switched = Event { at: 3_000, what: What::User {} };
+        let b = Backup { app: "padwake".into(), format: FORMAT, events: vec![started.clone(), rated.clone()], ..Default::default() };
+        let text = serde_json::to_string(&b).unwrap();
+        assert!(text.contains(r#""events":[{"at":1000,"type":"started","v":"0.3.4","restarted":false},{"at":2000,"type":"rating","game":"hades","rating":5}]"#), "{text}");
+        let back: Backup = serde_json::from_str(&text).unwrap();
+        assert_eq!(back, b);
+        // what goes up: this PC's events with the gist's, each once
+        let here = [rated.clone(), switched.clone()];
+        assert_eq!(events::merge(&here, &back.events), [started, rated, switched]);
     }
 
     #[test]

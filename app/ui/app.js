@@ -14,6 +14,14 @@ const FIRST = 'start'; // the light show and "Press any button", which reveals H
 const SCREENS = ['start', 'home', 'library', 'search', 'control-center', 'settings', 'media', 'journal', 'gallery', 'users'];
 const stage = document.getElementById('stage');
 const loaded = new Map();
+// the host hears the top screen when it changes: over a running game, that's where the session's time goes (row B1b)
+let reported = null;
+const report = () => {
+  const id = app.top?.id;
+  if (!id || id === reported) return;
+  reported = id;
+  Promise.resolve().then(() => host.games.screen(id)).catch(() => {});
+};
 
 // the design canvas is 1920×1080; scale it to the window (the Avita runs 1920×1080 at 150%, so 1280×720 CSS px)
 function fit() {
@@ -44,6 +52,7 @@ const app = {
     for (const s of this.stack.reverse()) { s.mod.leave?.(); s.el.classList.remove('on'); }
     this.stack = [];
     await this.push(id, params);
+    report();
   },
   async push(id, params = {}) {
     const s = await load(id);
@@ -51,6 +60,7 @@ const app = {
     this.stack.push(s);
     s.el.classList.add('on');
     s.mod.enter?.(params);
+    report();
   },
   pop() {
     if (this.stack.length < 2) return;
@@ -58,6 +68,7 @@ const app = {
     s.mod.leave?.();
     s.el.classList.remove('on');
     this.top.mod.enter?.({ back: true });
+    report();
   },
 };
 window.__app = app;

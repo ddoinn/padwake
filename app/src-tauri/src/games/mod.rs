@@ -14,17 +14,25 @@
 //!   (up to 200 ms) for the page's `over_ready`: the still decoded and on its stage, so the first frame shows the game.
 //! - `resume` sleeps the app and brings the game's window to the front; `close` asks the game to close and ends it
 //!   after 5 s. When the session ends: playtime and last played (`library::record_session`), then Home.
+//! - Row B1b: each session (games and media) logs a line in the player's `sessions.jsonl` with what it can learn
+//!   cheaply (`stats.rs`): where the time went, idle, launch time, where it was launched from, how it ended, the job's
+//!   CPU and memory, pad, display and power at start and end, Guide opens, screenshots, trophies and achievements.
+//!   The slow reads (pads, display, achievement files) run on the waiter thread, before the wait and after Home is
+//!   back. While it runs, the line so far is saved once a minute, so a Padwake restart still logs it.
 
 mod backdrop;
 mod capture;
 mod front;
 pub mod session;
+mod stats;
 mod window;
 
 pub use window::{sleep, wake};
 
+use crate::library::sessions::{Session as Line, Snapshot};
 use serde::Serialize;
 use session::Tracked;
+use stats::{Clock, Idle, Where};
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
@@ -72,6 +80,23 @@ struct Live {
     /// the session's window, last seen in front
     window: Option<isize>,
     ready: bool,
+    // ---- the session log (row B1b) ----
+    /// who started it: the line goes to their log
+    user: String,
+    /// home | library | search | switch
+    from: Option<String>,
+    clock: Clock,
+    /// over the game: Home or Control Center, whichever the page shows
+    over: Where,
+    idle: Idle,
+    launch_ms: Option<u64>,
+    guide: u32,
+    screenshots: u32,
+    /// Close Game asked it to close
+    closing: bool,
+    at_start: Option<Snapshot>,
+    /// unlocked achievements as it started (games with an unlock file)
+    achievements: Option<u32>,
 }
 
 static LIVE: Mutex<Option<Live>> = Mutex::new(None);
@@ -107,6 +132,11 @@ struct GameEvent<'a> {
     played: Option<u64>,
 }
 
+/// Where a launch came from, as the page says it; anything else isn't logged.
+pub fn launched_from(from: Option<String>) -> Option<String> {
+    from.filter(|f| ["home", "library", "search", "switch"].contains(&f.as_str()))
+}
+
 fn emit<R: Runtime>(app: &AppHandle<R>, id: &str, kind: Kind, state: &str, show: Option<&str>) {
     let _ = app.emit("game", GameEvent { id, kind, state, show, front: None, played: None });
 }
@@ -125,7 +155,7 @@ pub struct Session {
 
 pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("games")
-        .invoke_handler(tauri::generate_handler![launch, close, resume, session, backdrop, over_ready, captures, delete_capture])
+        .invoke_handler(tauri::generate_handler![launch, close, resume, session, backdrop, over_ready, captures, delete_capture, screen])
         .setup(|app, _api| {
             let app = app.clone();
             front::start(move |hwnd, pid| came_to_front(&app, hwnd, pid));
@@ -147,7 +177,7 @@ fn log(line: &str) {
 /// Starts a session: spawns the command (this sets its creation flags) in a job, or opens the link, sleeps the app, and
 /// tracks it until no process of it remains; `folder` also counts processes run from that folder (an opened link has
 /// only those). With `appear`, the session waits that long for something to run from the folder. Emits `game` events
-/// with `id` and `kind`. Errors if a session already runs.
+/// with `id` and `kind`. Errors if a session already runs. `from`: where it was launched from (the session log).
 pub fn start<R: Runtime>(
     app: &AppHandle<R>,
     kind: Kind,
@@ -156,6 +186,7 @@ pub fn start<R: Runtime>(
     how: How,
     folder: Option<PathBuf>,
     appear: Option<Duration>,
+    from: Option<String>,
 ) -> Result<(), String> {
     let started = Instant::now();
     let tracked = {
@@ -184,16 +215,28 @@ pub fn start<R: Runtime>(
         unsafe {
             let _ = AllowSetForegroundWindow(ASFW_ANY);
         }
+        let started_at = now_ms();
         *live = Some(Live {
             kind,
             id: id.to_string(),
             name: name.to_string(),
             started,
-            started_at: now_ms(),
+            started_at,
             tracked: tracked.clone(),
             front: Front::Game,
             window: None,
             ready: false,
+            user: crate::users::current_id(),
+            from,
+            clock: Clock::new(started),
+            over: Where::Home,
+            idle: Idle::new(started_at),
+            launch_ms: None,
+            guide: 0,
+            screenshots: 0,
+            closing: false,
+            at_start: None,
+            achievements: None,
         });
         tracked
     };
@@ -206,8 +249,9 @@ pub fn start<R: Runtime>(
         sleep(app);
     }
 
-    let handle = app.clone();
+    let (handle, game) = (app.clone(), (kind == Kind::Game).then(|| id.to_string()));
     let waiter = std::thread::Builder::new().name("session-wait".into()).spawn(move || {
+        begin(started, game.as_deref());
         tracked.wait();
         end(&handle);
     });
@@ -242,6 +286,7 @@ pub fn back_to_session<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
         let mut live = live();
         let l = live.as_mut().ok_or("nothing is running")?;
         l.front = Front::Game;
+        l.clock.to(Where::Game, Instant::now());
         (l.tracked.clone(), l.window)
     };
     window::on_top(app, false);
@@ -264,11 +309,12 @@ pub fn back_to_session<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
 /// session as for any exit.
 pub fn close_session(id: Option<&str>) -> Result<session::Closed, String> {
     let tracked = {
-        let live = live();
-        let l = live.as_ref().ok_or("nothing is running")?;
+        let mut live = live();
+        let l = live.as_mut().ok_or("nothing is running")?;
         if id.is_some_and(|id| id != l.id) {
             return Err(format!("{} is not running", id.unwrap_or_default()));
         }
+        l.closing = true;
         l.tracked.clone()
     };
     let closed = tracked.close(CLOSE_GRACE);
@@ -327,6 +373,9 @@ pub fn guide<R: Runtime>(app: &AppHandle<R>, kind: &str) -> bool {
             return false;
         }
         l.front = Front::App;
+        l.guide += 1;
+        l.over = if kind == "tap" { Where::ControlCenter } else { Where::Home };
+        l.clock.to(l.over, Instant::now());
         (l.id.clone(), l.kind)
     };
     // the page starts resuming (the window stays hidden) while the screen is copied, and hears "over" before the
@@ -411,37 +460,165 @@ fn cover<R: Runtime>(app: &AppHandle<R>, id: &str, started: Instant) {
     }
 }
 
-/// The session ended: playtime and last played for a game, then the app comes back and Home follows `exited`.
-fn end<R: Runtime>(app: &AppHandle<R>) {
-    let Some(l) = live().take() else { return };
-    let secs = l.started.elapsed().as_secs_f64().round() as u64;
-    if l.kind == Kind::Game && !crate::library::record_session(&l.id, secs, now_ms()) {
-        log(&format!("{} is no longer in the library; {secs} s not recorded", l.id));
+/// The session's log line so far (row B1b): all that is known at `now`, but not how it ended. Its start is the launch,
+/// the same in every copy (the session's identity), and its end is the start plus its whole seconds.
+fn line(l: &Live, now: Instant) -> Line {
+    let secs = now.saturating_duration_since(l.started).as_secs_f64().round() as u64;
+    let end = l.started_at + secs * 1000;
+    let base = match l.kind {
+        Kind::Game => Line::ended(&l.id, secs, end),
+        Kind::Media => Line { kind: Some("media".into()), app: Some(l.id.clone()), ..Line::ended("", secs, end) },
+    };
+    Line {
+        v: Some(env!("CARGO_PKG_VERSION").into()),
+        from: l.from.clone(),
+        launch_ms: l.launch_ms,
+        front: Some(l.clock.front(now)),
+        idle_secs: Some(l.idle.secs()),
+        at_start: l.at_start.clone(),
+        guide: Some(l.guide),
+        screenshots: Some(l.screenshots),
+        ..base
     }
-    log(&format!("{} ended after {secs} s", l.id));
+}
+
+/// The latest pad, keyboard or mouse input, as Unix ms.
+fn last_input(now: u64) -> u64 {
+    crate::input::last_change().max(stats::last_key_or_mouse(now))
+}
+
+/// On the waiter thread as the session starts, off the launch path: the PC as it started and the game's achievements
+/// (`game`: None for media), then the line so far is saved, and again once a minute (idle, and for a restart).
+fn begin(started: Instant, game: Option<&str>) {
+    let snapshot = stats::snapshot(crate::input::last_pad());
+    let achievements = game.and_then(crate::library::unlocked);
+    let mut guard = live();
+    let Some(l) = guard.as_mut().filter(|l| l.started == started) else { return };
+    l.at_start = Some(snapshot);
+    l.achievements = achievements;
+    // saved with the session held, so it can't land after the session ended and its line was logged
+    crate::library::save_open_session(&l.user, &line(l, Instant::now()));
+    drop(guard);
+    let ticker = std::thread::Builder::new().name("session-minute".into()).spawn(move || loop {
+        std::thread::sleep(stats::MINUTE);
+        let mut live = live();
+        let Some(l) = live.as_mut().filter(|l| l.started == started) else { return };
+        let now = now_ms();
+        l.idle.check(now, last_input(now));
+        crate::library::save_open_session(&l.user, &line(l, Instant::now()));
+    });
+    if let Err(e) = ticker {
+        log(&format!("session minute thread: {e}"));
+    }
+}
+
+/// The session ended: playtime and last played for a game, then the app comes back and Home follows `exited`. Then,
+/// with Home back, the rest of the log line (the PC at the end, achievements), and the line goes in the log.
+fn end<R: Runtime>(app: &AppHandle<R>) {
+    let Some(mut l) = live().take() else { return };
+    let (now, ended_at) = (Instant::now(), now_ms());
+    let secs = now.saturating_duration_since(l.started).as_secs_f64().round() as u64;
+    // read while the job's handle is still open
+    let usage = l.tracked.usage();
+    let exit = l.tracked.exit_code();
+    l.idle.check(ended_at, last_input(ended_at));
+    let mut entry = line(&l, now);
+    let crashed = !l.closing && exit.is_some_and(|c| c != 0);
+    entry.ended = Some(if l.closing { "close" } else if crashed { "crash" } else { "quit" }.into());
+    entry.exit = exit.filter(|_| crashed);
+    if let Some((cpu_ms, peak)) = usage {
+        entry.cpu_ms = Some(cpu_ms);
+        entry.peak_mb = Some((peak + (1 << 19)) >> 20);
+    }
+    // the exact line first: if Padwake stops from here on, the next start counts it (unless it was) and logs it
+    crate::library::save_open_session(&l.user, &entry);
+    let recorded = match l.kind {
+        Kind::Game => match crate::library::record_session(&l.id, secs, entry.end) {
+            Some(trophies) => {
+                entry.trophies = trophies;
+                true
+            }
+            None => {
+                log(&format!("{} is no longer in the library; {secs} s not recorded", l.id));
+                false
+            }
+        },
+        Kind::Media => true,
+    };
+    if !entry.trophies.is_empty() {
+        crate::library::save_open_session(&l.user, &entry);
+    }
+    log(&format!("{} ended after {secs} s ({})", l.id, entry.ended.as_deref().unwrap_or_default()));
     backdrop::clear();
     window::on_top(app, false);
     wake(app);
     let _ = app.emit("game", GameEvent { id: &l.id, kind: l.kind, state: "exited", show: None, front: Some(l.front), played: Some(secs) });
+    if !recorded {
+        crate::library::drop_open_session(&l.user, &entry);
+        return;
+    }
+    entry.at_end = Some(stats::snapshot(crate::input::last_pad()));
+    if l.kind == Kind::Game {
+        if let (Some(before), Some(after)) = (l.achievements, crate::library::unlocked(&l.id)) {
+            entry.achievements = Some([before, after]);
+        }
+    }
+    crate::library::log_session(&l.user, &entry);
+}
+
+/// A screenshot of the session `id` was saved (`capture.rs`).
+fn screenshot_saved(id: &str) {
+    if let Some(l) = live().as_mut().filter(|l| l.id == id) {
+        l.screenshots += 1;
+    }
 }
 
 /// A window of another process came to the front. The session's first one means the game is up: "Ready to play".
 fn came_to_front<R: Runtime>(app: &AppHandle<R>, hwnd: isize, pid: u32) {
     if pid == unsafe { GetCurrentProcessId() } {
+        // our own window in front: over the game, the screen it shows
+        let give_back = {
+            let mut live = live();
+            let Some(l) = live.as_mut() else { return };
+            if l.front == Front::App {
+                l.clock.to(l.over, Instant::now());
+                return;
+            }
+            // while the game is up and the app asleep, our window comes to the front only by accident: Windows hands
+            // it the foreground a moment after the "Ready to play" toast shows. Give it back to the game, or the game
+            // loses its keyboard and later focus changes go unreported.
+            if !l.ready {
+                return;
+            }
+            l.tracked.main_window(l.window)
+        };
+        if let Some(w) = give_back {
+            log("our window took the front over the game: given back");
+            window::bring_to_front(w);
+        }
         return;
     }
     let ready = {
         let mut live = live();
         let Some(l) = live.as_mut() else { return };
         if !l.tracked.contains(pid) {
+            // another app in front (once the game is up: while it loads, the desktop may flash in front)
+            // Windows' own alt-tab, taskbar and desktop windows come to the front in passing: not another app
+            if l.ready && !front::in_passing(hwnd) && l.clock.to(Where::Other, Instant::now()) {
+                log(&format!("{}: another app in front (pid {pid})", l.id));
+            }
             return;
         }
         l.window = Some(hwnd);
+        if l.clock.to(Where::Game, Instant::now()) {
+            log(&format!("{}: in front again", l.id));
+        }
         if l.ready {
             return;
         }
         l.ready = true;
         l.tracked.mark_shown();
+        l.launch_ms = Some(l.started.elapsed().as_millis() as u64);
         (l.id.clone(), l.kind, l.name.clone(), l.front)
     };
     let (id, kind, name, front) = ready;
@@ -457,11 +634,12 @@ fn came_to_front<R: Runtime>(app: &AppHandle<R>, hwnd: isize, pid: u32) {
 // ---------- commands ----------
 
 /// Launches a library game: through its store's launcher, or its exe in its folder; tracked with that folder.
+/// `from`: home | library | search | switch.
 #[tauri::command]
-async fn launch<R: Runtime>(app: AppHandle<R>, id: String) -> Result<(), String> {
+async fn launch<R: Runtime>(app: AppHandle<R>, id: String, from: Option<String>) -> Result<(), String> {
     let game = crate::library::get(&id).ok_or_else(|| format!("no game {id}"))?;
     let (how, appear) = how_to_start(&game)?;
-    start(&app, Kind::Game, &id, &game.name, how, Some(game.folder.clone()), appear)
+    start(&app, Kind::Game, &id, &game.name, how, Some(game.folder.clone()), appear, launched_from(from))
 }
 
 /// The launcher's link (and the wait for the game), or the exe with the store's arguments.
@@ -481,6 +659,16 @@ fn how_to_start(game: &crate::library::Game) -> Result<(How, Option<Duration>), 
     }
     let ea = game.store.as_ref().is_some_and(|s| s.name == StoreName::Ea);
     Ok((How::Run(cmd), ea.then_some(LAUNCHER_GRACE)))
+}
+
+/// The page's top screen changed (`ui/app.js`). Over a running game, that's where the time goes: Control Center or
+/// Home (any other screen). Ignored while the game is in front.
+#[tauri::command]
+fn screen(id: String) {
+    if let Some(l) = live().as_mut().filter(|l| l.front == Front::App) {
+        l.over = if id == "control-center" { Where::ControlCenter } else { Where::Home };
+        l.clock.to(l.over, Instant::now());
+    }
 }
 
 /// Close Game: resolves once the game was asked and, if it stayed, ended (up to 5 s). `game` "exited" follows.
@@ -563,5 +751,14 @@ mod tests {
         let (how, appear) = how_to_start(&game(None)).unwrap();
         assert!(matches!(how, How::Run(ref c) if c.get_args().count() == 0) && appear.is_none());
         assert!(how_to_start(&Game { exe: PathBuf::new(), ..game(None) }).is_err(), "nothing to start");
+    }
+
+    #[test]
+    fn only_known_launch_places_are_logged() {
+        for from in ["home", "library", "search", "switch"] {
+            assert_eq!(launched_from(Some(from.into())).as_deref(), Some(from));
+        }
+        assert_eq!(launched_from(Some("Search: hades".into())), None, "never search text");
+        assert_eq!(launched_from(None), None);
     }
 }

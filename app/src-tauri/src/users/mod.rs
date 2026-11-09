@@ -322,6 +322,7 @@ pub fn switch<R: Runtime>(app: &AppHandle<R>, id: &str) -> Result<(), String> {
         drop(u);
         crate::library::set_user(id);
     });
+    crate::library::log_event(id, crate::library::events::What::User {});
     crate::cloud::user_switched(app);
     log(&format!("users: switched to {id}"));
     Ok(())

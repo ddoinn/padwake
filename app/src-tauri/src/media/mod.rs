@@ -134,7 +134,7 @@ fn arguments(profile: &Path, url: &str) -> Vec<OsString> {
         "--autoplay-policy=no-user-gesture-required".into(), format!("--app={url}").into()]
 }
 #[tauri::command]
-async fn open<R: Runtime>(app: AppHandle<R>, id: String) -> Result<(), String> {
+async fn open<R: Runtime>(app: AppHandle<R>, id: String, from: Option<String>) -> Result<(), String> {
     if crate::games::current().is_some_and(|s| s.kind == crate::games::Kind::Media && s.id == id) {
         return crate::games::back_to_session(&app);
     }
@@ -146,7 +146,7 @@ async fn open<R: Runtime>(app: AppHandle<R>, id: String) -> Result<(), String> {
     let mut cmd = Command::new(edge); cmd.args(arguments(&profile, &entry.url));
     // The private profile prevents handoff to personal Edge. Only track the job: the profile isn't an
     // executable folder, and tracking Edge's install folder could close somebody's personal browser.
-    crate::games::start(&app, crate::games::Kind::Media, &id, &entry.name, crate::games::How::Run(cmd), None, None)
+    crate::games::start(&app, crate::games::Kind::Media, &id, &entry.name, crate::games::How::Run(cmd), None, None, crate::games::launched_from(from))
 }
 #[cfg(test)]
 mod tests {

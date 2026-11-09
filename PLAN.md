@@ -63,6 +63,84 @@ the row when it's done. B1 is worth a release of its own, so the log starts coll
     ids in a merged log; match by `portable.rs`'s rules if that ever matters. A PC still on 0.3.4 that uploads drops
     the log from the gist, but the next upload from a PC with B1 puts it back (its own log is merged in).
 
+### Row B1b: Log everything cheap about play (each user's)
+
+Decisions (2026-11-08, Madhav: "log everything you can so that we can make detailed stats"):
+1. Padwake writes down what it can learn cheaply about each session, so later rows can build detailed stats. No UI.
+2. All of it stays on the PC, except the user's own private backup gist.
+3. Never logged: FPS, GPU or temperature sampling, single keys or buttons, window titles, search text, note text.
+4. It mustn't cost anything you'd notice: running-game CPU and Home idle cost stay within `docs/performance.md`.
+   Only OS events and job counters, with idle checked at most once a minute.
+
+- **Outcome:**
+  - Each line in `sessions.jsonl` gets new optional fields. Lines from B1 still read.
+    - Where the time went: seconds with the game in front, Home (any Padwake screen), Control Center, or another app
+      in front. This comes from `games/front.rs` foreground events, Guide, and the page reporting its top screen.
+      Windows' alt-tab switcher, taskbar and desktop don't count as another app. After alt-tab, the window picked
+      sometimes gets no event, so each event arms a single re-read of the foreground 500 ms later.
+    - Idle seconds: stretches of 5+ min with no pad, keyboard or mouse input, checked once a minute.
+    - Launch to first window (ms). Where it was launched from: Home, Library, Search or Switch Game.
+    - How it ended: quit, Close Game, crash (a non-zero exit, with the code) or Padwake restart.
+    - The job's CPU time and peak memory, read once at the end. Best effort: processes outside the job aren't counted.
+    - At start and at end: pad name, connection and battery; display mode and HDR; AC or battery, and battery %.
+    - Guide opens, screenshots taken, Padwake trophies earned, achievements before→after (when an unlock file
+      exists), and the Padwake version.
+  - Media apps (YouTube, Netflix, …) log lines too, with `"kind":"media"` and the app. They add no playtime.
+  - A session cut short by a Padwake restart is still logged. A small file next to the log is updated once a minute
+    while a game runs. At the next start it becomes a line ending "restart", and its time counts up to the last
+    minute seen, so the log and `play.json` still agree.
+  - A new `users\<id>\events.jsonl` with dated events: journal status set or cleared, rating changed, note edited
+    (no text), user switched to, Padwake started and stopped. It goes in the backup and merges without doubles.
+  - `addedAt` on library games (shared) was already there: every game gets it when its folder joins (0.1.0).
+- **Done when:** unit tests for every field and for the backup merge of events. A live debug run (own data folder,
+  test pad) of a stand-in from `W:\games-test` plays two sessions, one ended with Close Game and one alt-tabbed, and
+  their lines show the right values. `cargo test --lib --locked` passes, and so do the UI probe checks in
+  `DEVELOPMENT.md`. Running-game CPU and Home idle cost are measured against `docs/performance.md`.
+- **Owns:** `app/src-tauri/src/library/{sessions,events,jsonl}.rs`, `games/{mod,stats,session,front}.rs`, the backup
+  (`library/portable.rs`, `cloud/backup.rs`). `from` and the top-screen report in `app/ui/{app,host}.js`,
+  `home/home.js`, `library/library.js`, `search/search.js`.
+- **Done (2026-11-08), measured:**
+  - On the Avita, a debug build with its own data dir, the test pad and `Stand-in Long` from `W:\games-test`
+    (before the review fixes) logged, in `users\<id>\sessions.jsonl`:
+    - Close Game: `"from":"home","ended":"close","launchMs":164,"front":{"game":10,"home":0,"controlCenter":8,
+      "other":0},"cpuMs":187,"peakMb":25,"guide":1`, display `1920×1080@60`, HDR off, `"power":{"ac":true}`.
+    - Alt-tabbed: `"secs":43,"ended":"quit","front":{"game":11,"controlCenter":3,"other":28}`. This matches the
+      Padwake log's timestamps (6.6 s game, 28.2 s other app, 3 s Control Center, 4.6 s game). The Stand-in Long
+      line `"trophies":["first-steps"]` matches `play.json` going from 39 to 82 s.
+    - A screenshot during a session: `"screenshots":1`.
+    - Padwake killed mid-game, then started again: one line `"ended":"restart","secs":60`. `play.json` went from
+      82 to 142 s and 4 sessions, and the open-session file was removed.
+    - `events.jsonl`: `started` (with `restarted`) and `stopped` on a clean close.
+    - No `pad` fields: the test pad isn't XInput. No battery fields: the Avita reports no system battery.
+  - Unit tests cover every field, the backup merge of events, restart recovery counted exactly once, and Switch Game
+    keeping the new session's open file. `cargo test --lib --locked`: 111 passed, 13 ignored, no warnings.
+  - UI probes: every check in `DEVELOPMENT.md` passes, including the new `play-log.json` (8 checks).
+    `gallery.json` fails with its documented `captures=9` query on the base too; it passes with `scene=home`.
+- **Done (2026-11-09), final run after the rebase onto #1 and #2:**
+  - The re-run found a hole: about 10 ms after the "Ready to play" toast shows, Windows hands the foreground to the
+    app's hidden window (and sometimes first to the window in front before the game). After that, Windows sends no
+    foreground event when focus goes back to the game, so an alt-tab could go unseen. Seen in the session log
+    as a 55 s alt-tabbed session with `"other":0`.
+  - Fix (`games/mod.rs`, `came_to_front`): our own window coming to the front while the game is up and the app
+    asleep is an accident, so the app hands the foreground straight back to the game (logged as "our window took
+    the front over the game: given back"). That also gives the game its keyboard back.
+  - Release build of the rebased head, own data dir, test pad, `Stand-in Long`, run in the desktop session through a
+    one-shot scheduled task (the agent shell is session 0):
+    - Close Game: `"secs":19,"ended":"close","launchMs":331,"front":{"game":10,"home":0,"controlCenter":9,
+      "other":0},"guide":1,"cpuMs":281,"peakMb":26`. The log: 9.7 s game, then 9.0 s Control Center.
+    - Alt-tabbed and back, then the game quit: `"secs":48,"ended":"quit","front":{"game":26,"controlCenter":0,
+      "other":22}`, `"trophies":["first-steps"]`. A separate foreground-event listener saw the other window
+      from 22:49:04.292 to 22:49:26.521 (22.2 s); Padwake logged 22:49:04.293 and 22:49:26.525.
+    - `events.jsonl`: `started` (`"restarted":false`) and `stopped` on a clean close. The open-session file is gone.
+  - Cost against `docs/performance.md` (release, 8 logical cores, 60 Hz, test pad, no XInput pad):
+    - Home idle: 0.0575% of the PC, GPU 0.006% average (baseline 0.0830%, 0.006%). One earlier sample read 0.0945%;
+      the other was 0.0575%. B1b adds no work on Home but a hook that waits for focus changes.
+    - While a game runs (10 s after launch, before the fix): 0.0508% of the PC, GPU 0.000% (baseline 0.0576%,
+      0.000%). The fix runs once per accidental focus change, never on a timer.
+  - `cargo test --lib --locked` on the rebased head: 125 passed, 14 ignored, no warnings. UI probes: all 13 lines in
+    `DEVELOPMENT.md` pass, `gallery.json` only with `scene=home` (its documented query fails on `main` too).
+  - On the Avita, idle stays 0 because a phantom keyboard key keeps resetting the idle timer.
+
 ### Row B2: Display settings per game (shared)
 - **Outcome:**
   - The Options menu (Menu on a game, `openMenu` in `home.js`) gets "Display for This Game". It offers the modes
