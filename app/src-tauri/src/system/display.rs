@@ -1,9 +1,13 @@
 //! The primary display: its modes (resolution and refresh rate), a trial mode change that reverts on its own unless
 //! kept, and HDR on/off. A trial is a dynamic change (not saved); keeping it saves it to the registry.
+//! Row B2: a game's display profile is applied as its session starts (`apply_profile`, dynamic, never saved) and put
+//! back as it ends (`restore_profile`). What it changed is written to `display-restore.json` in the data dir first, so
+//! if Padwake stops mid-game, its next start puts the display back too.
 
 use super::log;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 use windows::core::PCWSTR;
@@ -30,7 +34,7 @@ pub const TRIAL: Duration = Duration::from_secs(15);
 /// Sends the `display` event: {state: "trial" | "kept" | "reverted", ...}.
 pub type Emit = Arc<dyn Fn(Value) + Send + Sync>;
 
-#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Mode {
     pub width: u32,
     pub height: u32,
@@ -382,6 +386,115 @@ pub fn try_mode(m: Mode, after: Duration, emit: Emit) -> Result<(), String> {
     Ok(())
 }
 
+// ---------- a game's display profile (row B2) ----------
+
+/// A game's display, kept in the settings by game id (`displayProfiles`). A missing field is the PC's setting.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq)]
+pub struct Profile {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<Mode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hdr: Option<bool>,
+}
+
+/// What `profile` changes on a display showing `current` with `hdr`, that offers `modes`: its mode, if the display
+/// still offers it and it isn't on already, and HDR, if the display has it and it differs. A mode the display no
+/// longer offers is skipped, never forced.
+pub fn plan(profile: &Profile, current: Mode, hdr: Hdr, modes: &[Mode]) -> Profile {
+    Profile {
+        mode: profile.mode.filter(|m| *m != current && modes.contains(m)),
+        hdr: profile.hdr.filter(|on| hdr.supported && *on != hdr.enabled),
+    }
+}
+
+/// What a profile changed, to put back: the display's mode and HDR from before, each only if it was changed.
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+struct Restore {
+    device: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    mode: Option<Mode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    hdr: Option<bool>,
+}
+
+fn restore_file() -> PathBuf {
+    crate::data::dir().join("display-restore.json")
+}
+
+fn device_name(device: &str) -> DeviceName {
+    let mut name = [0u16; 32];
+    for (slot, c) in name.iter_mut().take(31).zip(device.encode_utf16()) {
+        *slot = c;
+    }
+    name
+}
+
+/// Applies a game's profile as its session starts: a dynamic change (the registry keeps the PC's mode), with what it
+/// changes written down first, for `restore_profile`. Parts the display can't do are skipped. A change still waiting
+/// to be put back (a session before this one) is put back first, so the saved display is always the PC's own.
+pub fn apply_profile(profile: &Profile) -> Result<(), String> {
+    restore_profile();
+    let dev = primary()?;
+    let base = current(&dev)?;
+    let now = mode_of(&base);
+    let device = wide(&dev);
+    let before = target_for(&device).map(|t| hdr(&t)).unwrap_or_default();
+    let todo = plan(profile, now, before, &usable_modes(&raw_modes(&dev)));
+    if let Some(m) = profile.mode.filter(|m| todo.mode.is_none() && *m != now) {
+        log(&format!("display: this game's {} isn't a mode of this display: skipped", describe(m)));
+    }
+    if profile.hdr.is_some_and(|on| todo.hdr.is_none() && !before.supported && on) {
+        log("display: this game's HDR is on, but this display has no HDR: skipped");
+    }
+    if todo == Profile::default() {
+        return Ok(());
+    }
+    let saved = Restore { device, mode: todo.mode.map(|_| now), hdr: todo.hdr.map(|_| before.enabled) };
+    let text = serde_json::to_vec(&saved).map_err(|e| e.to_string())?;
+    std::fs::write(restore_file(), text).map_err(|e| format!("display-restore.json: {e}"))?;
+    let mut result = Ok(());
+    if let Some(m) = todo.mode {
+        result = apply(&dev, &base, m, CDS_TYPE(0));
+        match &result {
+            Ok(()) => log(&format!("display: this game's {} (was {})", describe(m), describe(now))),
+            Err(e) => log(&format!("display: this game's mode: {e}")),
+        }
+    }
+    if let Some(on) = todo.hdr {
+        if let Err(e) = set_hdr(on) {
+            log(&format!("display: this game's HDR: {e}"));
+            result = result.and(Err(e));
+        }
+    }
+    result
+}
+
+/// Puts back what a game's profile changed, if anything is waiting: at the end of its session, and at start (Padwake
+/// stopped mid-game). Returns the mode and HDR on screen just before (what the session ran at), if it put anything back.
+pub fn restore_profile() -> Option<(Mode, bool)> {
+    let path = restore_file();
+    let saved: Restore = serde_json::from_slice(&std::fs::read(&path).ok()?).ok().or_else(|| {
+        let _ = std::fs::remove_file(&path);
+        None
+    })?;
+    let ran = now();
+    // HDR first: turning it on or off may reset the mode
+    if let Some(on) = saved.hdr {
+        if let Err(e) = set_hdr(on) {
+            log(&format!("display: putting HDR back: {e}"));
+        }
+    }
+    if let Some(m) = saved.mode {
+        let dev = device_name(&saved.device);
+        match current(&dev).and_then(|base| if mode_of(&base) == m { Ok(()) } else { apply(&dev, &base, m, CDS_TYPE(0)) }) {
+            Ok(()) => log(&format!("display: put back {}", describe(m))),
+            Err(e) => log(&format!("display: putting the mode back: {e}")),
+        }
+    }
+    let _ = std::fs::remove_file(&path);
+    ran
+}
+
 /// Keeps the trial mode and saves it.
 pub fn keep(emit: &Emit) -> Result<(), String> {
     let mut st = state();
@@ -434,6 +547,41 @@ mod tests {
             usable_modes(&list),
             vec![m(1920, 1200, 60), m(1920, 1080, 144), m(1920, 1080, 60), m(1280, 720, 60)]
         );
+    }
+
+    #[test]
+    fn a_profile_changes_only_what_the_display_can_do_and_isnt_on() {
+        let m = |width, height, hz| Mode { width, height, hz };
+        let modes = [m(1920, 1080, 60), m(1280, 720, 60)];
+        let now = m(1920, 1080, 60);
+        let sdr = Hdr { supported: true, enabled: false };
+        let p = |mode, hdr| Profile { mode, hdr };
+        // a mode the display offers, and HDR it has: both change
+        assert_eq!(plan(&p(Some(m(1280, 720, 60)), Some(true)), now, sdr, &modes), p(Some(m(1280, 720, 60)), Some(true)));
+        // a mode the monitor no longer offers (another monitor, or 144 Hz gone) is skipped, not applied
+        assert_eq!(plan(&p(Some(m(1280, 720, 144)), None), now, sdr, &modes), Profile::default());
+        assert_eq!(plan(&p(Some(m(2560, 1440, 60)), Some(true)), now, sdr, &modes), p(None, Some(true)));
+        // what is on already changes nothing (nothing to put back after)
+        assert_eq!(plan(&p(Some(now), Some(false)), now, sdr, &modes), Profile::default());
+        // HDR on a display without it is skipped
+        assert_eq!(plan(&p(None, Some(true)), now, Hdr::default(), &modes), Profile::default());
+        // "Use PC Setting" for both: nothing
+        assert_eq!(plan(&Profile::default(), now, sdr, &modes), Profile::default());
+    }
+
+    #[test]
+    fn profiles_and_what_to_put_back_read_and_write_with_only_their_parts() {
+        let p: Profile = serde_json::from_str(r#"{"mode":{"width":1280,"height":720,"hz":60}}"#).unwrap();
+        assert_eq!(p, Profile { mode: Some(Mode { width: 1280, height: 720, hz: 60 }), hdr: None });
+        assert_eq!(serde_json::to_string(&Profile { mode: None, hdr: Some(false) }).unwrap(), r#"{"hdr":false}"#);
+        let r = Restore { device: r"\\.\DISPLAY1".into(), mode: Some(Mode { width: 1920, height: 1080, hz: 60 }), hdr: None };
+        let text = serde_json::to_string(&r).unwrap();
+        assert_eq!(text, r#"{"device":"\\\\.\\DISPLAY1","mode":{"width":1920,"height":1080,"hz":60}}"#);
+        assert_eq!(serde_json::from_str::<Restore>(&text).unwrap(), r);
+        let name = device_name(r"\\.\DISPLAY1");
+        assert_eq!(wide(&name), r"\\.\DISPLAY1");
+        assert_eq!(name[31], 0, "always ends in a nul, however long the name");
+        assert_eq!(wide(&device_name(&"x".repeat(40))).len(), 31);
     }
 
     #[test]

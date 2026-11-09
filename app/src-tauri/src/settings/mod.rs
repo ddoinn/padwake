@@ -23,6 +23,17 @@ fn set<R: Runtime>(app: AppHandle<R>, patch: Map<String, Value>) -> Result<Map<S
     Ok(all)
 }
 
+/// Row B2: a game's display profile, if it has one. Profiles are shared settings: `displayProfiles`, keyed by game id
+/// (Home's Options menu sets them through `set`).
+pub fn display_profile(id: &str) -> Option<crate::system::DisplayProfile> {
+    profile_in(&crate::data::settings(), id)
+}
+
+fn profile_in(all: &Map<String, Value>, id: &str) -> Option<crate::system::DisplayProfile> {
+    let p: crate::system::DisplayProfile = serde_json::from_value(all.get("displayProfiles")?.get(id)?.clone()).ok()?;
+    (p.mode.is_some() || p.hdr.is_some()).then_some(p)
+}
+
 /// True if `path` is an existing folder (the games folder picker checks before saving).
 #[tauri::command]
 fn folder_exists(path: String) -> bool {
@@ -32,6 +43,21 @@ fn folder_exists(path: String) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_games_display_profile_is_found_by_its_id() {
+        let all: Map<String, Value> = serde_json::from_str(
+            r#"{"music":true,"displayProfiles":{"hades":{"mode":{"width":1280,"height":720,"hz":60},"hdr":true},
+                "celeste":{},"broken":{"mode":"1280x720"}}}"#,
+        )
+        .unwrap();
+        let p = profile_in(&all, "hades").unwrap();
+        assert_eq!((p.mode.map(|m| (m.width, m.height, m.hz)), p.hdr), (Some((1280, 720, 60)), Some(true)));
+        assert_eq!(profile_in(&all, "celeste"), None, "Use PC Setting for both: no profile");
+        assert_eq!(profile_in(&all, "broken"), None, "a profile that doesn't read is no profile");
+        assert_eq!(profile_in(&all, "elden-ring"), None);
+        assert_eq!(profile_in(&Map::new(), "hades"), None);
+    }
 
     #[test]
     fn folder_exists_only_for_folders() {

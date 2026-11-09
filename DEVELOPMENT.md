@@ -35,6 +35,7 @@ node tools/app/ui-probe.mjs --query "scene=home&gameMs=0" tools/app/checks/troph
 node tools/app/ui-probe.mjs --query users=3 tools/app/checks/users.json
 node tools/app/ui-probe.mjs --query "scene=settings&settings=library/1/r&stores=1" tools/app/checks/stores.json
 node tools/app/ui-probe.mjs --query "scene=home&gameMs=0" tools/app/checks/play-log.json
+node tools/app/ui-probe.mjs --query scene=home tools/app/checks/display-profile.json
 ```
 
 The UI probe uses headless Edge and mock host data. Set EDGE to your Edge executable; its default path and the capture/input tools target the Windows development laptop.
