@@ -208,6 +208,47 @@ Decisions (2026-11-08, Madhav: "log everything you can so that we can make detai
   different smart lists but the same own lists. Plus a screenshot of the Lists tab on the Avita.
 - **Owns:** `app/ui/library/library.js` (tab), a new `app/ui/library/lists.js` and its CSS, "Add to List…" in
   `app/ui/home/home.js`, a new `app/src-tauri/src/library/collections.rs`, `tools/app/checks/lists.json`.
+- **Done (2026-11-10), measured:**
+  - UI probe `lists.json` (`--query "scene=home&users=3"`, 49 checks) passes: each smart list with seeded games
+    (Playing, Never Played, Finished incl. 100% complete, On Hold, Short Games ≤ 10 h, Not Played in 3 Months
+    without Finished, Completed or Dropped), your list showing only games in the library, A opening a list as the
+    cover grid and B back to its tile, making a list on the keyboard, a taken name (any case) reopening it with the
+    reason, rename, Remove from List (also on a scrolled third row), delete with a confirm, Add to List… on Home
+    (tick on, off, New List… with the game in it), the sort button's focus moving to the tiles, and a second user
+    (Asha) seeing her own smart lists (Playing: Hollow Knight, Never Played: 11, empty ones hidden) but the same
+    own lists. Every other probe line in `DEVELOPMENT.md` passes too (`gallery.json` with `scene=home`, as on `main`).
+  - Unit tests (`collections.rs`): `lists_are_made_renamed_and_deleted_and_survive_a_write`,
+    `names_must_be_there_short_enough_and_not_taken`, `a_game_goes_in_once_and_comes_out`,
+    `a_broken_file_reads_as_no_lists`. `cargo test --lib --locked`: 132 passed, 14 ignored.
+  - On the Avita, a release build with its own data dir, `W:\games-test`, the test pad and one user whose
+    `play.json` had Hades playing, Celeste finished, God of War 100% complete, Hollow Knight paused, Red Dead
+    Redemption 2 last played 120 days ago and Cyberpunk dropped 150 days ago, plus a `collections.json` with
+    "Couch Co-op" (Celeste, Hollow Knight), run in the desktop session through a one-shot scheduled task:
+    - Options on Hades → Add to List… listed Couch Co-op and New List…; A ticked it, and `collections.json` became
+      `"games": ["celeste", "hollow-knight", "hades"]`.
+    - The Lists tab showed "Lists: 7": Playing 1, Never Played 7, Finished 2, On Hold 1, Short Games 1 (Celeste,
+      from HowLongToBeat by itself), Not Played in 3 Months 1 (Red Dead, not Cyberpunk), Couch Co-op 3, New List,
+      each with its games' art. A on Playing opened "Playing: 1" with Hades; B went back to its tile.
+    - A `play.json` written before the library had scanned its games was dropped at the first save (its games
+      weren't in the library yet), so the run starts Padwake once to scan, then writes it. That is how `library`
+      loads plays today, not this row's.
+  - Decisions:
+    - Smart lists are worked out in the page (`ui/library/lists.js`) from the `library` event, which already carries
+      the current user's time, sessions and journal, so they follow a user switch with no host code. They cover games
+      in the library only (not removed ones in the journal). Never Played is no sessions, no time and no last played.
+      Paused shows as "On Hold", the journal's own name for that status.
+    - `data\collections.json` is `{"lists": [{id, name, games, createdAt}]}`, oldest first, games in the order added.
+      A game whose folder is gone stays in its lists (it's back when the folder returns) but isn't shown. Names are
+      trimmed, 1–32 characters and unique ignoring case. Every change is written whole and sent as the `lists` event.
+      Lists aren't in the GitHub backup: the backup is each user's, lists are the PC's.
+    - Tiles are the cover grid's slots (296 px, pitch 320) in the PS5's system-app tile style (§1.4): up to four
+      covers, the name and count always shown (a tile has nothing else to tell it by), a spark glyph on smart lists
+      in the lock icon's slot, and a centred + on New List. The tab, an opened list and B back all use the measured
+      tab switch (cut, 200 ms empty, 315 ms fade); focus and scrolling are the Library's.
+    - An open list sorts with the Library's sort button and sort. There's no sort over the tiles, so the button hides
+      there. Menu on your list (its tile, or a game in it) offers Rename List, Delete List and, on a game, Remove
+      from List; deleting says "Delete for Everyone" and starts on Cancel, because lists are shared.
+    - Add to List… sits right after Display for This Game; A ticks a list on or off and the menu stays open.
 
 ### Row B4: Monthly and yearly recap (each user's)
 - **Outcome:**

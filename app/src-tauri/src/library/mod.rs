@@ -23,6 +23,7 @@
 //!   user switches, Padwake started and stopped). A session cut short by a restart is logged at the next start.
 
 pub(crate) mod art; // also the users area's character pictures
+pub mod collections;
 pub mod events;
 mod hltb;
 mod jsonl;
@@ -240,12 +241,28 @@ fn state() -> MutexGuard<'static, Saved> {
 
 pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("library")
-        .invoke_handler(tauri::generate_handler![list, refresh, rescan, journal, review, forget])
+        .invoke_handler(tauri::generate_handler![
+            list,
+            refresh,
+            rescan,
+            journal,
+            review,
+            forget,
+            collections::lists,
+            collections::list_create,
+            collections::list_rename,
+            collections::list_delete,
+            collections::list_toggle
+        ])
         .setup(|app, _api| {
             load();
             recover_open_session();
             log_event(&state().user.clone(), events::What::Started { v: env!("CARGO_PKG_VERSION").into(), restarted: crate::startup::restarted() });
             let app = app.clone();
+            let lists_app = app.clone();
+            let _ = collections::NOTIFY.set(Box::new(move |lists| {
+                let _ = lists_app.emit("lists", lists);
+            }));
             let _ = NOTIFY.set(Box::new(move |games| {
                 let _ = app.emit("library", games);
             }));

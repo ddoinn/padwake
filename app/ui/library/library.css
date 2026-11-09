@@ -1,5 +1,6 @@
 /* Game Library (row A8): design/ps5/2-library.md §1. Numbers are 1920×1080 stage px. Text boxes are placed so the
    ink lands on the measured cap lines (Open Sans: ascent 1.069 em, descent .293 em, cap .714 em). */
+@import url('./lists.css'); /* the Lists tab (lists.js): loaded with this file, so the router waits for it */
 
 #screen-library { background: #000004; }
 #screen-library .lbg { position: absolute; inset: 0; z-index: 0; background: #000004; } /* the shared moving spotlight */
