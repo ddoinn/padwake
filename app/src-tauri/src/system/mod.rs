@@ -22,7 +22,7 @@ pub use display::{Display, Mode};
 pub use network::{Net, Wifi};
 pub use display::now as display_now;
 pub use display::{apply_profile as apply_display_profile, restore_profile as restore_display_profile, Profile as DisplayProfile};
-pub use pads::{pads, Connection, PadBattery};
+pub use pads::{pads, xinput_ids, Connection, PadBattery};
 pub use toast::{overlay_toast, raise_toasts, without_toasts};
 
 pub fn plugin<R: Runtime>() -> TauriPlugin<R> {

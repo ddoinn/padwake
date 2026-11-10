@@ -9,6 +9,7 @@
 // Motion: the journal page's opening (12 frames, opacity and 24 px up) for the screen and for each page; the art
 // cross-fades in 340 ms as there. Nothing else moves.
 
+import { btn } from '../input/glyphs.js';
 import { build, load, span, period, WEEKDAYS, MONTHS, PARTS } from './recaps.js';
 import { squareArt, tint } from './shared.js';
 import { TIER_COLOR, CUP } from './trophies.js';
@@ -287,7 +288,7 @@ const PAGES = [
           ${cell(r.trophies.length.toLocaleString(), r.trophies.length === 1 ? 'Trophy' : 'Trophies')}${cell(r.finished.length.toLocaleString(), 'Finished')}
         </div>
       </div>
-      <div class="note">A to close</div>
+      <div class="note">${btn('a')} to close</div>
     </div>`;
   }],
 ];

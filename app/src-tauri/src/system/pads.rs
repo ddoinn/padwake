@@ -33,14 +33,15 @@ pub enum Connection {
     Receiver,
 }
 
-/// A connected pad. `level` is 0 (empty) to 3 (full) and means something only when `kind` isn't "wired".
+/// A connected pad. `level` is 0 (empty) to 3 (full) and means something only when `kind` isn't "wired"; None when
+/// the pad reports none Padwake reads (PlayStation and Switch pads, row C1).
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct PadBattery {
     pub slot: u32,
     /// XInput's battery type: wired | alkaline | nimh | unknown
     pub kind: &'static str,
-    pub level: u8,
+    pub level: Option<u8>,
     pub connection: Connection,
     /// the product name, when the device reports a real one
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -178,9 +179,31 @@ fn usb_description(ids: &[String], vid: u16, pid: u16) -> Option<String> {
     matches.into_iter().find_map(|id| bus_description(id).filter(|d| !d.is_empty()))
 }
 
+/// An XInput slot's USB VID/PID, if XInputGetCapabilitiesEx knows them (the input poller's mirror check, row C1).
+pub fn xinput_ids(slot: u32) -> Option<(u16, u16)> {
+    let mut caps = CapsEx::default();
+    let ok = get_caps_ex().is_some_and(|f| unsafe { f(1, slot, 0, &mut caps) } == 0);
+    (ok && caps.vendor_id != 0).then_some((caps.vendor_id, caps.product_id))
+}
+
+/// PlayStation and Switch pads read over HID (row C1): named by family only, no battery yet.
+fn hid_pads() -> impl Iterator<Item = PadBattery> {
+    crate::input::hid_pads().into_iter().map(|p| PadBattery {
+        slot: p.slot,
+        kind: if p.bluetooth { "unknown" } else { "wired" },
+        level: None,
+        connection: if p.bluetooth { Connection::Wireless } else { Wired },
+        name: Some(p.model.label().to_string()),
+        vid: 0,
+        pid: 0,
+    })
+}
+
 pub fn pads() -> Vec<PadBattery> {
     let mut ids: Option<Vec<String>> = None; // listed once, and only when a pad is connected
-    (0..4)
+    let xinput = (0..4)
+        // a PlayStation or Switch pad's XInput mirror (DS4Windows, Steam Input) is listed once, as that pad (row C1)
+        .filter(|&slot| !crate::input::muted(slot))
         .filter_map(|slot| {
             let mut info = XINPUT_BATTERY_INFORMATION::default();
             if unsafe { XInputGetBatteryInformation(slot, BATTERY_DEVTYPE_GAMEPAD, &mut info) } != 0 {
@@ -205,14 +228,14 @@ pub fn pads() -> Vec<PadBattery> {
             Some(PadBattery {
                 slot,
                 kind,
-                level: info.BatteryLevel.0.min(3),
+                level: Some(info.BatteryLevel.0.min(3)),
                 connection: classify(info.BatteryType.0, caps_wireless, vid, pid, desc.as_deref()),
                 name: product_name(vid, pid, desc.as_deref()),
                 vid,
                 pid,
             })
-        })
-        .collect()
+        });
+    xinput.chain(hid_pads()).collect()
 }
 
 #[cfg(test)]
@@ -285,7 +308,7 @@ mod tests {
         }
         for p in pads {
             println!(
-                "slot {}: {:04X}:{:04X} battery {} level {}, description {:?} -> {:?}, name {:?}",
+                "slot {}: {:04X}:{:04X} battery {} level {:?}, description {:?} -> {:?}, name {:?}",
                 p.slot, p.vid, p.pid, p.kind, p.level, usb_description(&ids, p.vid, p.pid), p.connection, p.name
             );
         }

@@ -22,6 +22,7 @@
 // - The top bar ends with the user's avatar (ui/users): A opens Switch User and Users. A switch sends the next user's
 //   `library`, so the row, hero and box art show their time and order.
 
+import { btn } from '../input/glyphs.js';
 import { runDistance, runSpeed } from '../input/input.js';
 import { warmControlCenter } from '../control-center/notices.js'; // Control Center's notifications and toasts, kept from boot
 import { toast } from '../control-center/toast.js';
@@ -113,7 +114,7 @@ export default {
       <div class="navy"><img class="lart" alt=""><div class="lscrim"></div>
         <div class="lmark"><img class="llogo" alt=""><div class="lname"></div><div class="lmeta"></div></div>
         <div class="lstatus"><svg viewBox="0 0 40 40"><circle class="ltrack" cx="20" cy="20" r="16"/><circle class="larc" cx="20" cy="20" r="16"/></svg><span>Loading</span></div>
-        <div class="lhint">Taking a while? Press Guide to close it.</div></div>
+        <div class="lhint">Taking a while? Press ${btn('guide')} to close it.</div></div>
       <div class="ui">
         <div class="top">
           <span class="tab sel" data-nav="tab:games">Games</span><span class="tab" data-nav="tab:media">Media</span>

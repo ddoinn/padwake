@@ -26,6 +26,8 @@
 // is Done, View shows or hides a secret. Held directions repeat (input layer, e.held). The mouse points and clicks keys.
 // A physical keyboard types straight into the field: it is a real <input>, which the input layer leaves alone.
 
+import { btn } from '../input/glyphs.js';
+
 const css = Object.assign(document.createElement('link'), { rel: 'stylesheet', href: './keyboard/keyboard.css' });
 document.head.append(css);
 
@@ -118,9 +120,9 @@ class Keyboard {
     const eyeOn = this.input.type === 'text';
     return [
       ...grid,
-      strip(FN_Y, FN_H, [['shift', G.shift, 116, 'LT'], ['abc', 'ABC', 115], ['sym', '@#:', 115], ['space', G.space, 367, 'Y'], ['back', G.back, 145, 'X']]),
-      strip(LAST_Y, LAST_H, [['left', G.left, 116, 'LB'], ['right', G.right, 115, 'RB'], ['clear', 'Clear', secret ? Math.floor(mid / 2) : mid],
-        ...(secret ? [['eye', eyeOn ? G.eyeOff : G.eye, Math.ceil(mid / 2), 'View']] : []), ['done', 'Done', 290, 'RT']]),
+      strip(FN_Y, FN_H, [['shift', G.shift, 116, btn('lt')], ['abc', 'ABC', 115], ['sym', '@#:', 115], ['space', G.space, 367, btn('y')], ['back', G.back, 145, btn('x')]]),
+      strip(LAST_Y, LAST_H, [['left', G.left, 116, btn('lb')], ['right', G.right, 115, btn('rb')], ['clear', 'Clear', secret ? Math.floor(mid / 2) : mid],
+        ...(secret ? [['eye', eyeOn ? G.eyeOff : G.eye, Math.ceil(mid / 2), btn('view')]] : []), ['done', 'Done', 290, btn('rt')]]),
     ];
   }
 

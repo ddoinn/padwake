@@ -9,8 +9,9 @@ What's next for Padwake, and the decisions behind it. The PS5 measurements the U
    recap for each user (B1 + B4), and a PS5-feel polish pass (B5).
 2. **No game recommendations.** Neither "pick for tonight" from your own library, nor games you don't own, nor an
    AI chat ("kind of ass right now"). Don't propose them again unless Madhav asks.
-3. **Later, not now:** the real trophy case (game achievements as trophies) and PlayStation / Switch controllers
-   (input is XInput only today). Context for the trophy case: every game, from any store, gets Padwake's six trophies.
+3. **Later, not now:** the real trophy case (game achievements as trophies). PlayStation / Switch controllers moved
+   up: they are next, as row C1 (Madhav, 2026-11-07: "I mostly don't use Steam... It's more for PlayStation and
+   Switch controls"). Context for the trophy case: every game, from any store, gets Padwake's six trophies.
    Real achievements show only where the game keeps an unlock file Padwake reads (`library/progress.rs`); Epic,
    GOG, Xbox and EA app achievements aren't read.
 4. **Recaps need a session log, which starts when B1 ships.** Today only totals are kept (time, sessions, first and
@@ -394,3 +395,84 @@ Decisions (2026-11-08, Madhav: "log everything you can so that we can make detai
 
     A first run with Home left on the Game Library tile (its preview showing) read 37.2 ms (B3) and 38.2 ms (this
     build), CPU 0.0696 % and 0.0703 %: that tile's move costs more than a game tile's, on both builds.
+
+### Row C1: PlayStation and Switch controllers
+- **Outcome:**
+  - Padwake reads DualSense (and Edge), DualShock 4 and Switch Pro controllers over USB and Bluetooth, besides XInput
+    pads. They feed the same button model XInput does, so navigation, A/B, shoulders, triggers, Menu and View work
+    everywhere, and the PS / Home button is Guide everywhere XInput's Guide is, including over a running game (tap,
+    hold, the screenshot chord with Create / Minus).
+  - Buttons go by position, as on an Xbox pad: south confirms and east goes back (Cross and Circle; Switch B and A).
+  - Hot-plug and several pads at once. A pad also shown through XInput (DS4Windows, Steam Input) counts once.
+  - Button hints follow the pad used last: Xbox letters, PlayStation shapes, Switch letters (B confirms, A goes back),
+    drawn by us as line icons in the existing style. Settings › Controllers names such a pad "PlayStation controller"
+    or "Switch controller" with its connection. No Sony or Nintendo assets, logos, fonts or other names.
+  - Later, not in this row: rumble, light bar, gyro, touchpad, battery, Joy-Cons as a pair, remapping.
+- **Done when:** unit tests parse spec-built HID reports of each pad (USB and Bluetooth layouts) into the right buttons
+  and sticks, and test the XInput dedupe. A UI probe check shows the hints swapping per pad family. Every probe line
+  in `DEVELOPMENT.md` passes (`gallery.json` with `scene=home`), `cargo test --lib --locked` passes, and Home idle
+  CPU/GPU stays within 10 % of `docs/performance.md`. Live proof with a real pad if the Avita has one (Get-PnpDevice,
+  VID 054C / 057E); else say so and rely on the report fixtures.
+- **Owns:** `app/src-tauri/src/input/` (a new `hid.rs`, `xinput.rs`, `test_hook.rs`, `mod.rs`), the HID pads' rows
+  in `app/src-tauri/src/system/pads.rs`, a new `app/ui/input/glyphs.js` and the hints that use it, a new
+  `tools/app/checks/pad-family.json`.
+- **Done (2026-11-10), measured:**
+  - No PlayStation or Switch pad has ever been on the Avita (`Get-PnpDevice`, present or not: nothing with VID 054C
+    or 057E), so no real pad was read. Instead, the test hook's new `report <ds4|ds5|pro> <usb|bt> <hex>` puts raw
+    report bytes through `hid.rs`'s parser and pad state, exactly where a reader thread would.
+  - Unit tests (`input/hid.rs`): every PlayStation layout (DualShock 4 USB 0x01, Bluetooth basic 0x01 and full 0x11,
+    DualSense USB 0x01, Bluetooth simple 0x01 and full 0x31) reads the four shapes by position, the hat every way
+    round, L1/R1, Create/Share as View, Options as Menu, L3/R3, PS as Guide, L2/R2 by their analog value and both
+    sticks y down. Switch Pro full 0x30 (USB and Bluetooth, and 0x21 replies) and simple 0x3F: B south, A east, Y
+    west, X north, L/R, ZL/ZR as triggers, − + Home, the 12-bit and 16-bit sticks. Reports without pad state are
+    skipped; the IDs pick the model; a ViGEm DualShock 4 (under a ROOT device) is skipped, real USB and Bluetooth
+    pads aren't; several pads get their own slots; gyro bytes are no change. `xinput.rs`: a DS4Windows (045E:028E)
+    or Steam (28DE) XInput slot is muted while a HID pad is read, a real Xbox pad isn't, and an echo that arrives
+    one poll before the HID pad's own report stays muted. `cargo test --lib --locked`: 144 passed, 15 ignored.
+  - UI probes: every line in `DEVELOPMENT.md` passes, plus the new `pad-family.json` (14 checks: Xbox letters, then a
+    PlayStation pad's shapes, L1/R2 and the home glyph, then Switch letters by position, names in the readings, a
+    state without a family keeping the hints, back to Xbox, an unknown family ignored). `start-cloud.json` failed
+    once with no assertion printed, then passed 3 of 3.
+  - On the Avita, a release build with its own data dir, a games folder with only Stand-in Long and the test pad, run
+    in the desktop session through one-shot scheduled tasks (person check first). DualSense USB reports: Cross
+    past the start screen, the hat and Cross to Settings › Controllers ("Controller 1 · Wired (USB) · PlayStation
+    controller"), Test Buttons with Cross and Options held (shapes, L1/L2, Create, Options and a home glyph; "Cross +
+    Options"), Circle held back to Controllers, PS held to Home, Cross to play Stand-in Long, PS tapped over it
+    (`padwake.log`: "guide tap over stand-in-long") and Close Game from Control Center ("ended after 19 s (close)").
+    A Switch Pro Bluetooth report with B and Plus held: Switch letters, B lit at the south, "B + Plus". The test pad's
+    plain `pad {"a":true}`: Xbox letters again.
+  - The live run found one bug the mock couldn't: in the app, the controller test's listener can run before the one
+    that sets `<html data-pad>`, so its readings named the previous pad's buttons. They now use the state's family.
+  - Home idle cost, this build and `main`'s, alternating, same conditions (fresh data dir, past the start screen,
+    20 s settle; release, 8 logical cores, 60 Hz, test pad, no real pad): over 120 s, this build 0.0966, 0.0934,
+    0.0741, 0.1015 % (mean **0.0914 %**), `main` 0.0838, 0.1030, 0.0917, 0.0950 % (mean **0.0934 %**); GPU 0.004 %
+    average for both (doc 0.006 %). 60 s samples spread more (this build 0.0865–0.1313 %, `main` 0.0706–0.1187 %),
+    always in the WebView processes; `padwake.exe` itself was the same. Both builds read about 10 % over the doc's
+    0.0830 % that day: the doc's conditions (v0.1.0, its own data) aren't today's, and this row adds nothing measurable.
+  - Not measurable without a pad: a connected pad's own reader thread wakes once per report (a DualSense streams
+    about 250 a second; parse and compare only, the poller is untouched unless a button or stick step changed). The
+    Switch Pro's USB start (handshake, then report mode 0x30, as Linux's hid-nintendo sends it) and real Bluetooth
+    layouts are proven only against the fixtures.
+  - Decisions:
+    - HID through the `windows` crate (CfgMgr32 for arrivals, `HidD_*`/`HidP_GetCaps`, overlapped `ReadFile`), no new
+      crate: only the `Win32_Devices_HumanInterfaceDevice` feature is new. A pad is shared-open, so Steam or a game
+      can read it too. Pads take slots 4 and up; the last one used picks the hints and its slot goes in the session
+      log's pad line ("PlayStation controller", wired or wireless, no battery).
+    - USB or Bluetooth from the input report length (64 on USB), and Sony's DualShock 4 USB adapter counts as
+      wireless. Sticks are raw, as XInput's (the Switch Pro's without its flash calibration: ±1600 around 2048).
+    - Mirrors: an XInput slot whose IDs are 045E:028E (what ViGEm emulates, so also a wired Xbox 360 pad) or Valve's
+      28DE is left out while a HID pad is connected, and Settings and Control Center leave it out too. It counts
+      again once it moves while every HID pad has been still for 500 ms and none moves in the next 100 ms (so a real
+      360 pad's first press is lost). ViGEm's emulated DualShock 4 is a HID device under ViGEmBus, a ROOT device:
+      skipped. HidHide setups hide the real pad, so there the mirror is all Padwake sees.
+    - Hints: `ui/input/glyphs.js` writes each hint in all three versions and `<html data-pad>` shows one (base.css),
+      so nothing re-renders on a switch. The state's `family` sets it; a state without one (keys, the mock) keeps it.
+      Words: Xbox A B X Y LB RB LT RT View ☰ Guide; PlayStation our cross, circle, square and triangle line shapes,
+      L1 R1 L2 R2 Create Options and "Home" for the PS button; Switch B A Y X (by position) L R ZL ZR − + Home. The
+      controller test also redraws its face, shoulder, View/Menu and Guide labels per family (a home glyph, a share
+      arrow for Create, − and +). Used in the users A glyph, the on-screen keyboard's corner hints, the journal page,
+      the recap's last page, the launch screen, the gallery's empty text, an empty list, Control Center's mouse-mode
+      line, and the controller test.
+    - Later (unchanged): rumble, light bar, gyro, touchpad (its click isn't mapped), battery, Joy-Cons as a pair, the
+      Capture button, remapping. Steam's desktop layout, which types keys for a pad while Steam runs, can still double
+      an Xbox or a PlayStation pad's presses.

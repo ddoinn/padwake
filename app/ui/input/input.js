@@ -22,6 +22,8 @@
 // Keyboard: arrows = D-pad, Enter or Space = A, Esc or Backspace = B, X = X, Y = Y, Q / E = LB / RB,
 // PageUp / PageDown = LT / RT, M or the context-menu key = Menu, V = View, Home = Guide (held 600 ms = Guide hold).
 
+import { setFamily } from './glyphs.js';
+
 export const HOLD_MS = 120;          // longer than a tap (keys and buttons are down 60-110 ms per tap)
 export const HOLD_STICK_MS = 200;    // a stick flick lasts longer than a button tap
 export const PITCH = 114;            // Home's tile pitch: the item size the step timing assumes
@@ -172,6 +174,7 @@ function startPad() {
   let prev = {};
   let stickDir = null;
   host.on('input', pad => {
+    if (pad.family) setFamily(pad.family);
     usingMouse(false);
     for (const b of PAD_BUTTONS) if (pad[b] && !prev[b]) fire(b, { source: 'pad' });
     for (const d of DIRS) {

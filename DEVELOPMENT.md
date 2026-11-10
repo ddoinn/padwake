@@ -40,6 +40,7 @@ node tools/app/ui-probe.mjs --query "scene=home&users=3" tools/app/checks/lists.
 node tools/app/ui-probe.mjs --query "scene=home&users=3&today=2026-11-10T20:00" tools/app/checks/recap.json
 node tools/app/ui-probe.mjs --query "today=2026-11-10T20:00" tools/app/checks/recap-notice.json
 node tools/app/ui-probe.mjs --query scene=home tools/app/checks/art-tint.json
+node tools/app/ui-probe.mjs --query "scene=settings&settings=controllers/0/r/1" tools/app/checks/pad-family.json
 ```
 
 The UI probe uses headless Edge and mock host data. Set EDGE to your Edge executable; its default path and the capture/input tools target the Windows development laptop.

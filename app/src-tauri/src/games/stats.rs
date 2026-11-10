@@ -123,9 +123,10 @@ pub fn snapshot(slot: u32, ran: Option<(crate::system::Mode, bool)>) -> Snapshot
     Snapshot { pad, display, power }
 }
 
-/// A pad's line: XInput's battery `kind` and `level` (0–3) become a word, nothing for a wired pad.
-fn pad(connection: &str, kind: &str, level: u8, name: Option<String>) -> Pad {
-    let battery = (kind != "wired").then(|| ["empty", "low", "medium", "full"][level.min(3) as usize].to_string());
+/// A pad's line: XInput's battery `kind` and `level` (0–3) become a word, nothing for a wired pad or one whose
+/// battery Padwake doesn't read.
+fn pad(connection: &str, kind: &str, level: Option<u8>, name: Option<String>) -> Pad {
+    let battery = level.filter(|_| kind != "wired").map(|l| ["empty", "low", "medium", "full"][l.min(3) as usize].to_string());
     Pad { name, connection: connection.to_string(), battery }
 }
 
@@ -198,12 +199,13 @@ mod tests {
     fn a_pad_line_has_a_battery_word_unless_wired() {
         let name = Some("Xbox Wireless Controller".to_string());
         assert_eq!(
-            pad("wireless", "nimh", 2, name.clone()),
+            pad("wireless", "nimh", Some(2), name.clone()),
             Pad { name: name.clone(), connection: "wireless".into(), battery: Some("medium".into()) }
         );
-        assert_eq!(pad("wireless", "alkaline", 0, None).battery.as_deref(), Some("empty"));
-        assert_eq!(pad("receiver", "unknown", 3, None).battery.as_deref(), Some("full"));
-        assert_eq!(pad("wired", "wired", 0, name).battery, None);
+        assert_eq!(pad("wireless", "alkaline", Some(0), None).battery.as_deref(), Some("empty"));
+        assert_eq!(pad("receiver", "unknown", Some(3), None).battery.as_deref(), Some("full"));
+        assert_eq!(pad("wired", "wired", Some(0), name).battery, None);
+        assert_eq!(pad("wireless", "unknown", None, None).battery, None, "a PlayStation pad on Bluetooth (row C1)");
     }
 
     #[test]

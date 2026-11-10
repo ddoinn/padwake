@@ -4,6 +4,9 @@
 //!   guide tap | guide hold           Guide down for 120 ms / 800 ms
 //!   press <button> [ms]              a b x y lb rb lt rt menu view guide up down left right l3 r3, for ms (default 80)
 //!   pad {"rx": 0.6, "a": true}       hold this state until the next `pad` line (sticks -1..1, y down); `pad {}` lets go
+//!   report ds5 usb 01807f...          one raw HID input report (hex, report ID first) from a PlayStation (ds4, ds5) or
+//!                                    Switch (pro) pad on usb or bt, through `hid.rs`'s parser as pad 5; `report off`
+//!                                    takes that pad away. The plain test pad stands in for an Xbox pad.
 //! Client: `tools/app/pad.ps1 'guide tap'`.
 
 use std::io::{BufRead, BufReader};
@@ -15,7 +18,7 @@ use windows::Win32::Storage::FileSystem::PIPE_ACCESS_INBOUND;
 use windows::Win32::System::Pipes::{ConnectNamedPipe, CreateNamedPipeW, PIPE_READMODE_BYTE, PIPE_TYPE_BYTE, PIPE_WAIT};
 
 /// What the virtual pad adds this poll: XInput button bits, triggers, and stick steps (0.05 each, y down).
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone, Copy, PartialEq)]
 pub struct Virtual {
     pub buttons: u16,
     pub lt: bool,
@@ -114,6 +117,9 @@ fn bit(name: &str) -> Option<u16> {
 
 fn command(line: &str, now: Instant) -> Result<(), String> {
     let (verb, rest) = line.split_once(' ').unwrap_or((line, ""));
+    if verb == "report" {
+        return report(rest); // hid.rs keeps that pad, under its own lock
+    }
     let mut guard = HOOK.lock().unwrap_or_else(|e| e.into_inner());
     let hook = guard.as_mut().ok_or("hook off")?;
     match verb {
@@ -160,6 +166,37 @@ fn command(line: &str, now: Instant) -> Result<(), String> {
     Ok(())
 }
 
+/// `report <ds4|ds5|pro> <usb|bt> <hex>` or `report off`.
+fn report(rest: &str) -> Result<(), String> {
+    use super::hid::{feed_test, Model};
+    let mut words = rest.split_whitespace();
+    let model = match words.next() {
+        Some("off") => {
+            feed_test(None);
+            return Ok(());
+        }
+        Some("ds4") => Model::DualShock4,
+        Some("ds5") => Model::DualSense,
+        Some("pro") => Model::SwitchPro,
+        other => return Err(format!("report: which pad? {other:?}")),
+    };
+    let bluetooth = match words.next() {
+        Some("usb") => false,
+        Some("bt") => true,
+        other => return Err(format!("report: usb or bt? {other:?}")),
+    };
+    let hex = words.next().ok_or("report: no bytes")?;
+    if hex.len() % 2 != 0 {
+        return Err("report: odd hex".into());
+    }
+    let bytes = (0..hex.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).map_err(|e| format!("report: {e}")))
+        .collect::<Result<Vec<u8>, _>>()?;
+    feed_test(Some((model, bluetooth, &bytes)));
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -183,5 +220,24 @@ mod tests {
         assert!(command("press nothing", t0).is_err());
         *HOOK.lock().unwrap() = None;
         assert!(state(t0).is_none(), "inert when off");
+    }
+
+    #[test]
+    fn a_report_drives_a_pad_through_the_hid_parser() {
+        use crate::input::hid_pads;
+        use super::super::hid::Model;
+        let t0 = Instant::now();
+        // a Switch Pro on Bluetooth, simple report: B (south) down, sticks at rest
+        let b_down = "3f01000800800080008000800000000000";
+        command(&format!("report pro bt {b_down}"), t0).unwrap();
+        let ours = || hid_pads().into_iter().find(|p| p.model == Model::SwitchPro && p.bluetooth && p.buttons == 0x1000);
+        let p = ours().expect("the test pad reads B as A");
+        assert!(p.slot >= 4, "a HID slot");
+        command("report off", t0).unwrap();
+        assert!(ours().is_none(), "report off takes it away");
+        assert!(command("report joycon bt 3f", t0).is_err());
+        assert!(command("report ds5 wifi 01", t0).is_err());
+        assert!(command("report ds5 usb 0", t0).is_err(), "odd hex");
+        assert!(command("report ds5 usb zz", t0).is_err());
     }
 }
