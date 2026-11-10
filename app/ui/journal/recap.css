@@ -157,3 +157,4 @@
 #screen-recap .p-summary .sc .v { font-size: 46px; line-height: 56px; font-weight: 300; white-space: nowrap; }
 #screen-recap .p-summary .sc .l { font-size: 22px; line-height: 28px; color: #bdbdc4; }
 #screen-recap .p-summary .note { margin-top: 26px; }
+#screen-recap .p-moment .cap .gt { white-space: normal; }

@@ -241,7 +241,7 @@ host.library.list().then(list => { if (!known) { library.games = list ?? []; see
 host.games.session?.().then(s => { if (s && !session.id) Object.assign(session, { id: s.id, kind: s.kind }); }).catch(() => {});
 
 // Row B4: on the first Home of a new month, "Your October recap is ready." (on 1 January the year's too), once for each
-// user: the month told is kept in the page's storage (). A month with no sessions gets none.
+// user: the month told is kept in the page's storage (`recap.noticed.<user>`). A month with no sessions gets none.
 // Checked after the start screen, on a user switch, when the app comes back over a game, and at the turn of the month.
 let recapCheck = Promise.resolve();
 function recapNotice() {
@@ -249,12 +249,12 @@ function recapNotice() {
     const [users, log] = await Promise.all([host.users.list(), host.library.recap()]);
     const user = users?.current;
     if (!user) return;
-    const key = , d = due(log);
+    const key = `recap.noticed.${user}`, d = due(log);
     let told = null;
     try { told = localStorage.getItem(key); } catch {}
     if (told === d.key) return;
     try { localStorage.setItem(key, d.key); } catch {}
-    for (const p of [d.month, d.year].filter(Boolean)) toast({ title: 'Recap', message: , icon: 'glyph:recap' });
+    for (const p of [d.month, d.year].filter(Boolean)) toast({ title: 'Recap', message: `Your ${p.name} recap is ready.`, icon: 'glyph:recap' });
   }).catch(e => console.warn('recap notice', e));
   return recapCheck;
 }

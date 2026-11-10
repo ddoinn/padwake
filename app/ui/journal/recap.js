@@ -300,7 +300,7 @@ const PAGES = [
     </div>`;
   }],
   ['moment', r => {
-    if (!r.shot) return null;
+    if (!r.shot || !r.sessions) return null;
     const s = r.shot;
     return `<div data-art="">
       <div class="kicker rise">A moment from ${esc(r.period.name)}</div>
@@ -313,7 +313,8 @@ const PAGES = [
     const app = id => data.media?.find(m => m.id === id);
     return `<div data-art="">
       <div class="kicker rise">Also on Padwake</div>
-      <div class="giant rise">${big(r.media.secs)}<small> of watching and listening</small></div>
+      <div class="giant rise">${big(r.media.secs)}</div>
+      <div class="lede rise">of watching and listening</div>
       <div class="apps">${r.media.apps.map(a => `<div class="app rise"><div class="ai">${app(a.id)?.art?.tile ? `<img alt="" src="${esc(host.fileUrl(app(a.id).art.tile))}">` : ''}</div>
         <div class="gn">${esc(app(a.id)?.name ?? a.id)}</div><div class="gt">${span(a.secs)}  ·  ${plural(a.sessions, 'time')}</div></div>`).join('')}</div>
     </div>`;

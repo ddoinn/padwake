@@ -12,6 +12,9 @@
 
 import { TROPHIES } from './trophies.js';
 
+// a trophy's name, tier and goal (not its rule: a recap is plain data)
+const trophyOf = id => { const t = TROPHIES.find(x => x.id === id); return t ? { name: t.name, tier: t.tier, goal: t.goal } : {}; };
+
 export const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 export const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 // the parts of a day, by the hour they start (local): night runs 22:00–05:00
@@ -141,7 +144,7 @@ export function build(p, log, games = new Map(), captures = []) {
     .map(e => ({ id: e.game, name: name(e.game), status: e.status, at: e.at }));
 
   // trophies (replayed by the host) and achievements (B1b: before → after, when the game has an unlock file)
-  const trophies = sessions.flatMap(s => (s.trophies ?? []).map(id => ({ id, game: s.game, gameName: name(s.game), at: s.end, ...TROPHIES.find(t => t.id === id) })))
+  const trophies = sessions.flatMap(s => (s.trophies ?? []).map(id => ({ id, game: s.game, gameName: name(s.game), at: s.end, ...trophyOf(id) })))
     .filter(t => t.name);
   const achievements = sessions.reduce((n, s) => n + (s.achievements ? Math.max(0, s.achievements[1] - s.achievements[0]) : 0), 0);
 
