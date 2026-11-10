@@ -11,6 +11,7 @@
 // Add User: a big avatar (a random popular character; A shows another), the name (A types it on the on-screen
 // keyboard), Cancel and OK. Settings → Users changes the avatar later, from characters, your pictures or ours.
 
+import { btn } from '../input/glyphs.js';
 import * as keyboard from '../keyboard/keyboard.js';
 import { mount as spotlight } from '../background/spotlight.js';
 import { avatarHtml, nextAvatar } from './avatars.js';
@@ -22,7 +23,7 @@ const PLUS = '<svg viewBox="0 0 64 64" style="width:30%;height:30%"><path d="M29
 const PAD = '<svg viewBox="0 0 64 64"><path fill="currentColor" d="M20 20h24c7.7 0 13 6.4 13.8 15.2l.9 9.6c.4 4.5-2.9 7.2-6.3 7.2-2.5 0-4.4-1.4-5.8-3.4L42.8 43H21.2l-3.8 5.6c-1.4 2-3.3 3.4-5.8 3.4-3.4 0-6.7-2.7-6.3-7.2l.9-9.6C7 26.4 12.3 20 20 20Zm-1.5 8v4h-4v4h4v4h4v-4h4v-4h-4v-4Zm25.5 0a2.6 2.6 0 1 0 0 5.2 2.6 2.6 0 0 0 0-5.2Zm-5.5 5.5a2.6 2.6 0 1 0 0 5.2 2.6 2.6 0 0 0 0-5.2Zm11 0a2.6 2.6 0 1 0 0 5.2 2.6 2.6 0 0 0 0-5.2Z"/></svg>';
 const POWER = '<svg viewBox="0 0 32 32"><path d="M10.2 8.6a10.4 10.4 0 1 0 11.6 0" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M16 4.5v11" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>';
 const CHECK = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#fff"/><path d="m7 12.5 3.2 3.2L17.5 8.5" fill="none" stroke="#111" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-const A_GLYPH = '<i class="ua">A</i>';
+const A_GLYPH = `<i class="ua">${btn('a')}</i>`;
 
 let app, host, root, $ = {}, spot = null;
 let index = 0, cards = [], params = {}, kb = null, busy = false;

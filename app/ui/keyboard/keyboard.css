@@ -30,10 +30,10 @@
 .osk-key.fn { background: rgba(159, 159, 159, .11); font-size: 23px; color: rgba(255, 255, 255, .78); }
 .osk-key.fn.on, .osk-key.fn.done { color: #fff; font-weight: 600; }
 .osk-key .g { display: grid; place-items: center; }
-.osk-key svg { display: block; }
+.osk-key .g svg { display: block; }
 .osk-key.shift { color: rgba(255, 255, 255, .62); }
 .osk-key.shift.on { color: #fff; }
-.osk-key.shift.on svg path { fill: currentColor; }
+.osk-key.shift.on .g svg path { fill: currentColor; }
 .osk-key.done { font-size: 24px; }
 /* the pad hints: tiny grey labels in the top-right corner */
 .osk-key .hint { position: absolute; right: 5px; top: 3px; font: 600 12px/1 'Open Sans', sans-serif; color: rgba(228, 228, 228, .5);

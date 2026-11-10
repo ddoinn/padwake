@@ -172,9 +172,9 @@
 #screen-settings .pad-back { display: flex; align-items: center; gap: 18px; }
 #screen-settings .pad-back small { margin-left: 12px; font-size: 20px; color: var(--val); }
 #screen-settings .pad-back-key { position: relative; width: 48px; height: 48px; display: grid; place-items: center; font-size: 22px; border: 1px solid #ffffff60; border-radius: 50%; }
-#screen-settings .pad-back-key svg { position: absolute; inset: -1px; width: 48px; height: 48px; transform: rotate(-90deg); }
-#screen-settings .pad-back-key circle { fill: none; stroke: #fff; stroke-width: 2; stroke-dasharray: 138.23; stroke-dashoffset: 138.23; }
-#screen-settings .holding-back .pad-back-key circle { stroke-dashoffset: 0; transition: stroke-dashoffset 1s linear; }
+#screen-settings .pad-back-key > svg { position: absolute; inset: -1px; width: 48px; height: 48px; transform: rotate(-90deg); }
+#screen-settings .pad-back-key > svg circle { fill: none; stroke: #fff; stroke-width: 2; stroke-dasharray: 138.23; stroke-dashoffset: 138.23; }
+#screen-settings .holding-back .pad-back-key > svg circle { stroke-dashoffset: 0; transition: stroke-dashoffset 1s linear; }
 #screen-settings .pad-escape { color: var(--val); font-size: 20px; }
 #screen-settings .pad-escape span { margin-left: 14px; font-size: 24px; color: #fff; }
 

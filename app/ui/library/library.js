@@ -26,6 +26,7 @@
 // game in it) offers Rename List, Delete List and, on a game, Remove from List; names are typed on the on-screen
 // keyboard, and a refused name opens it again with the reason as its title.
 
+import { btn } from '../input/glyphs.js';
 import * as journal from './journal.js';
 import * as lists from './lists.js';
 import * as keyboard from '../keyboard/keyboard.js';
@@ -252,8 +253,9 @@ function paintCounts() {
 function paintEmpty() {
   if (!$.empty) return;
   $.empty.querySelector('.msg').textContent = openList ? 'Nothing in this list yet' : 'No games yet';
-  $.empty.querySelector('.sub').textContent = openList ? 'Press ☰ on a game on Home, then Add to List…, to put it here.' :
-    `Put each game in its own folder in ${gamesRoot || 'the games folder'}, or install games with Steam, Epic Games, GOG, Xbox or the EA app. New folders show up here a few minutes after they stop changing.`;
+  const sub = $.empty.querySelector('.sub');
+  if (openList) sub.innerHTML = `Press ${btn('menu')} on a game on Home, then Add to List…, to put it here.`;
+  else sub.textContent = `Put each game in its own folder in ${gamesRoot || 'the games folder'}, or install games with Steam, Epic Games, GOG, Xbox or the EA app. New folders show up here a few minutes after they stop changing.`;
 }
 
 // ---------- the grid ----------

@@ -24,3 +24,11 @@ body { font-family: 'Open Sans', sans-serif; color: var(--text); user-select: no
 #stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; overflow: hidden; transform-origin: 0 0; background: #000; }
 .screen { position: absolute; inset: 0; visibility: hidden; }
 .screen.on { visibility: visible; }
+/* Button hints follow the pad used last (row C1, input/glyphs.js): each hint holds the Xbox, PlayStation and Switch
+   versions, and <html data-pad> shows one. The shapes are line glyphs like every other icon. */
+.pf-playstation, .pf-switch { display: none; }
+:root[data-pad="playstation"] .pf-xbox, :root[data-pad="switch"] .pf-xbox { display: none; }
+:root[data-pad="playstation"] .pf-playstation, :root[data-pad="switch"] .pf-switch { display: revert; }
+.pb { white-space: nowrap; }
+.pb-shape { width: .9em; height: .9em; vertical-align: -.14em; fill: none; stroke: currentColor; stroke-width: 2.6;
+  stroke-linecap: round; stroke-linejoin: round; }

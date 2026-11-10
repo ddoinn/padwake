@@ -93,11 +93,13 @@ export function sound(ctx) {
 const BATTERY = ['Empty', 'Low', 'Medium', 'Full'];
 const CONNECTION = { wired: 'Wired (USB)', wireless: 'Wireless', receiver: 'Wireless (2.4 GHz receiver)' };
 // a pad's rows. XInput reports a battery only for pads it sees as wireless; a 2.4 GHz receiver looks wired to it.
-const padRows = p => {
+// A PlayStation or Switch pad (row C1) has no level: Padwake doesn't read its battery yet.
+const padRows = (p, i) => {
   const link = p.connection ?? (p.kind === 'wired' ? 'wired' : 'wireless');
-  const battery = link === 'wireless' ? BATTERY[p.level] ?? 'Unknown' : link === 'receiver' ? 'Not reported by this controller' : null;
+  const battery = p.level == null ? null
+    : link === 'wireless' ? BATTERY[p.level] ?? 'Unknown' : link === 'receiver' ? 'Not reported by this controller' : null;
   return [
-    { kind: 'header', label: `Controller ${p.slot + 1}` },
+    { kind: 'header', label: `Controller ${i + 1}` },
     { kind: 'info', key: `pad${p.slot}`, label: 'Connection', value: CONNECTION[link] ?? 'Unknown' },
     ...(p.name ? [{ kind: 'info', key: `pad${p.slot}name`, label: 'Name', value: p.name }] : []),
     ...(battery ? [{ kind: 'info', key: `pad${p.slot}battery`, label: 'Battery', value: battery }] : []),

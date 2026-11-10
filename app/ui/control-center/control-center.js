@@ -13,6 +13,7 @@
 // - Power from Home's power icon: app.push('control-center', {power: true}) opens straight to the Power panel.
 // Read-only state for tests: window.__cc.state().
 
+import { btn } from '../input/glyphs.js';
 import { notices, session, takeOver, onNotices, library, dropPreStill } from './notices.js';
 import { toast } from './toast.js';
 import { isCloudPc, END_LABEL, END_TITLE, END_STEPS } from '../cloud-pc.js';
@@ -536,7 +537,7 @@ function content(id) {
         text('The right stick moves the pointer.'),
         text('A clicks, X right-clicks.'),
         text('The left stick scrolls.'),
-        text('B or the Guide button ends it.'),
+        { ...text('B or the Guide button ends it.'), html: `${btn('b')} or the ${btn('guide')} button ends it.` },
       ] };
     case 'power':
       loadPower();
@@ -604,9 +605,11 @@ async function loadController() {
   const connection = { wired: 'Wired (USB)', wireless: 'Wireless', receiver: 'Wireless (2.4 GHz receiver)' };
   const line = p => {
     const link = p.connection ?? (p.kind === 'wired' ? 'wired' : 'wireless');
+    // a PlayStation or Switch pad (row C1) is named by its family and reports no battery Padwake reads
+    if (p.level == null) return `${p.name ?? 'Controller'} · ${connection[link] ?? 'Unknown'}`;
     return link === 'wireless' ? `Wireless · Battery: ${level[p.level] ?? 'Unknown'}` : connection[link] ?? 'Unknown';
   };
-  const rows = pads.length ? pads.map(p => info(`Controller ${p.slot + 1}`, line(p))) : [info('Controller', 'None connected')];
+  const rows = pads.length ? pads.map((p, i) => info(`Controller ${i + 1}`, line(p))) : [info('Controller', 'None connected')];
   rows.push({ label: 'Vibration', kind: 'toggle', on: settings.rumble !== false, run: () => toggleRumble() });
   fill('controller', rows);
 }
@@ -640,7 +643,8 @@ function render() {
     el.className = `row ${r.kind}`;
     if (focusable(r)) el.dataset.nav = `cc:row:${i}`;
     el.innerHTML = '<span class="l"></span><span class="v"></span>';
-    el.querySelector('.l').textContent = r.label;
+    if (r.html) el.querySelector('.l').innerHTML = r.html; // our own strings, with button glyphs
+    else el.querySelector('.l').textContent = r.label;
     const v = el.querySelector('.v');
     if (r.kind === 'slider') {
       v.innerHTML = '<b></b><span class="track"><i></i><em></em></span>';

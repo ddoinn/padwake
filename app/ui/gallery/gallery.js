@@ -7,6 +7,8 @@
 // LB / RB step, B shrinks it back. X or ☰ deletes (asks first). LT / RT jump two rows.
 // Only rows near the view have elements; thumbnails fade in once decoded. Nothing animates while idle.
 
+import { btn } from '../input/glyphs.js';
+
 const X0 = 172, Y0 = 338, COLS = 4, W = 376, H = 212, PX = 400, PY = 236, VIEW_TOP = 260, PAGE_ROWS = 2;
 const FRAME = 1000 / 60;
 const EASE = 'cubic-bezier(0.20, 0.80, 0.45, 1)'; // Settings' expand curve
@@ -45,7 +47,7 @@ export default {
         <div class="gring"></div>
       </div></div>
       <div class="gempty"><div class="msg">No captures yet</div>
-        <div class="sub">Press Guide + View on your controller while you play to save a screenshot of the game. They show up here.</div></div>
+        <div class="sub">Press ${btn('guide')} + ${btn('view')} on your controller while you play to save a screenshot of the game. They show up here.</div></div>
       <div class="ghead"><div class="gicon">${ICON}</div><div class="gtitle">Media Gallery</div></div>
       <div class="gv" data-nav="viewer"><div class="gdim"></div><div class="gpic"><img alt=""></div><div class="gpic"><img alt=""></div>
         <div class="gvhead"><span class="gvname"></span><span class="gvcount"></span></div></div>

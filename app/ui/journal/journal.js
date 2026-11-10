@@ -11,6 +11,7 @@
 // status steps it, on the note opens the keyboard, on Forget asks once more. Each change is saved 300 ms after the last
 // one, and at once when the page closes.
 
+import { btn } from '../input/glyphs.js';
 import * as keyboard from '../keyboard/keyboard.js';
 import { STATUSES, statusOf, EMPTY, NOTE_MAX, hours, date, ago, stars, tint, squareArt, percentOf } from './shared.js';
 import { TROPHIES, earned, CUP } from './trophies.js';
@@ -23,7 +24,7 @@ const IN = { duration: 12 * FRAME, easing: 'cubic-bezier(0, 0, .2, 1)' };
 const HINTS = {
   rating: 'Left and right set the stars',
   status: 'Left and right change the status',
-  note: 'A writes a note',
+  note: `${btn('a')} writes a note`,
   forget: 'Your time and notes for this game go too',
 };
 
@@ -271,7 +272,7 @@ function focusRow(i, instant = false) {
   $.jpring.style.width = `${r.button ? r.el.offsetWidth + 14 : ROW_W + 40}px`;
   $.jpring.getAnimations().forEach(a => a.cancel());
   if (!instant) $.jpring.animate([{ opacity: 0.35 }, { opacity: 1 }], { duration: 8 * FRAME, easing: 'linear' });
-  $.jphint.textContent = HINTS[r.id] ?? '';
+  $.jphint.innerHTML = HINTS[r.id] ?? ''; // our own strings, with button glyphs
   return true;
 }
 
@@ -300,7 +301,7 @@ function openNote() {
 
 // ---------- forgetting a removed game: A, then A again within 4 s ----------
 function drawForget(el) {
-  el.innerHTML = `<span>${forgetArmed ? 'Press A again to forget it' : 'Forget this game'}</span>`;
+  el.innerHTML = `<span>${forgetArmed ? `Press ${btn('a')} again to forget it` : 'Forget this game'}</span>`;
 }
 
 function disarm() {

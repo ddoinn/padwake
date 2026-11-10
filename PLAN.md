@@ -9,8 +9,9 @@ What's next for Padwake, and the decisions behind it. The PS5 measurements the U
    recap for each user (B1 + B4), and a PS5-feel polish pass (B5).
 2. **No game recommendations.** Neither "pick for tonight" from your own library, nor games you don't own, nor an
    AI chat ("kind of ass right now"). Don't propose them again unless Madhav asks.
-3. **Later, not now:** the real trophy case (game achievements as trophies) and PlayStation / Switch controllers
-   (input is XInput only today). Context for the trophy case: every game, from any store, gets Padwake's six trophies.
+3. **Later, not now:** the real trophy case (game achievements as trophies). PlayStation / Switch controllers moved
+   up: they are next, as row C1 (Madhav, 2026-11-07: "I mostly don't use Steam... It's more for PlayStation and
+   Switch controls"). Context for the trophy case: every game, from any store, gets Padwake's six trophies.
    Real achievements show only where the game keeps an unlock file Padwake reads (`library/progress.rs`); Epic,
    GOG, Xbox and EA app achievements aren't read.
 4. **Recaps need a session log, which starts when B1 ships.** Today only totals are kept (time, sessions, first and
@@ -394,3 +395,24 @@ Decisions (2026-11-08, Madhav: "log everything you can so that we can make detai
 
     A first run with Home left on the Game Library tile (its preview showing) read 37.2 ms (B3) and 38.2 ms (this
     build), CPU 0.0696 % and 0.0703 %: that tile's move costs more than a game tile's, on both builds.
+
+### Row C1: PlayStation and Switch controllers
+- **Outcome:**
+  - Padwake reads DualSense (and Edge), DualShock 4 and Switch Pro controllers over USB and Bluetooth, besides XInput
+    pads. They feed the same button model XInput does, so navigation, A/B, shoulders, triggers, Menu and View work
+    everywhere, and the PS / Home button is Guide everywhere XInput's Guide is, including over a running game (tap,
+    hold, the screenshot chord with Create / Minus).
+  - Buttons go by position, as on an Xbox pad: south confirms and east goes back (Cross and Circle; Switch B and A).
+  - Hot-plug and several pads at once. A pad also shown through XInput (DS4Windows, Steam Input) counts once.
+  - Button hints follow the pad used last: Xbox letters, PlayStation shapes, Switch letters (B confirms, A goes back),
+    drawn by us as line icons in the existing style. Settings › Controllers names such a pad "PlayStation controller"
+    or "Switch controller" with its connection. No Sony or Nintendo assets, logos, fonts or other names.
+  - Later, not in this row: rumble, light bar, gyro, touchpad, battery, Joy-Cons as a pair, remapping.
+- **Done when:** unit tests parse spec-built HID reports of each pad (USB and Bluetooth layouts) into the right buttons
+  and sticks, and test the XInput dedupe. A UI probe check shows the hints swapping per pad family. Every probe line
+  in `DEVELOPMENT.md` passes (`gallery.json` with `scene=home`), `cargo test --lib --locked` passes, and Home idle
+  CPU/GPU stays within 10 % of `docs/performance.md`. Live proof with a real pad if the Avita has one (Get-PnpDevice,
+  VID 054C / 057E); else say so and rely on the report fixtures.
+- **Owns:** `app/src-tauri/src/input/` (a new `hid.rs`, `xinput.rs`, `test_hook.rs`, `mod.rs`), the HID pads' rows
+  in `app/src-tauri/src/system/pads.rs`, a new `app/ui/input/glyphs.js` and the hints that use it, a new
+  `tools/app/checks/pad-family.json`.

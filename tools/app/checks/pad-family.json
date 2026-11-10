@@ -1,0 +1,36 @@
+[
+  {"wait": 600},
+  {"key": "Enter"}, {"wait": 900},
+  {"eval": "window.__shape = n => { const p = n.querySelector('path,circle,rect'); if (!p) return '?'; if (p.tagName === 'circle') return 'circle'; if (p.tagName === 'rect') return 'square'; return p.getAttribute('d').startsWith('M12') ? 'triangle' : 'cross'; }; window.__vis = el => { const out = []; const walk = n => { if (n.nodeType === 3) out.push(n.textContent); else if (n.nodeType === 1 && getComputedStyle(n).display !== 'none') { if (n.dataset?.glyph) out.push('[' + n.dataset.glyph + ']'); else if (n.matches('svg.pb-shape, g.pad-symbol[transform]')) out.push('[' + __shape(n) + ']'); else n.childNodes.forEach(walk); } }; walk(el); return out.join('').replace(/\\s+/g, ' ').trim(); }; 'helpers ready'"},
+  {"eval": "import('./input/glyphs.js').then(g => { const d = document.createElement('div'); d.id = 'pbprobe'; d.innerHTML = ['a','b','x','y','lb','rb','lt','rt','view','menu','guide'].map(b => '<i>' + g.btn(b) + '</i>').join(''); document.body.append(d); return 'every hint, rendered once'; })"},
+  {"eval": "window.__face = () => ['a','b','x','y','lb','rt','guide'].map(b => __vis(document.querySelector('.pad-key[data-button=' + b + ']'))).join(' '); window.__hints = () => [...document.querySelectorAll('#pbprobe i')].map(__vis).join(' '); 'ok'"},
+
+  {"assert": "!document.documentElement.dataset.pad && __face() === 'A B X Y LB RT G'", "why": "Before any pad says otherwise, the drawing has Xbox labels"},
+  {"assert": "__hints() === 'A B X Y LB RB LT RT View ☰ Guide'", "why": "Xbox hints: letters and Xbox words (☰ for Menu, as the Library always said)"},
+  {"assert": "__vis(document.querySelector('.pad-help')).startsWith('Guide opens Control Center.') && __vis(document.querySelector('[data-trigger=lt]')) === 'LT Released' && __vis(document.querySelector('.pad-back-key')) === 'B'", "why": "The test's help, trigger and back-key hints are Xbox's"},
+
+  {"emit": "input", "payload": {"family": "playstation"}}, {"wait": 50},
+  {"assert": "document.documentElement.dataset.pad === 'playstation' && __face() === '[cross] [circle] [square] [triangle] L1 R2 [home]' || (console.log(__face()), false)", "why": "A PlayStation pad's state swaps the drawing to the four shapes, L1/R2 and a home glyph (south is Cross)"},
+  {"assert": "__hints() === '[cross] [circle] [square] [triangle] L1 R1 L2 R2 Create Options Home'", "why": "PlayStation hints: our line shapes and plain words, no Sony names"},
+  {"assert": "__vis(document.querySelector('.pad-help')).startsWith('Home opens Control Center.') && __vis(document.querySelector('[data-trigger=rt]')) === 'R2 Released' && __vis(document.querySelector('.pad-back-key')) === '[circle]'", "why": "Help, trigger and back-key hints follow"},
+  {"emit": "input", "payload": {"family": "playstation", "a": true, "view": true, "guide": true}},
+  {"assert": "document.querySelector('[data-reading=buttons]').textContent === 'Cross + Create + Home'", "why": "Pressed buttons are named as on that pad"},
+  {"shot": "pad-family-playstation"},
+  {"emit": "input", "payload": {"family": "playstation"}},
+
+  {"emit": "input", "payload": {"family": "switch", "a": true, "b": true, "rt": true}}, {"wait": 50},
+  {"assert": "document.documentElement.dataset.pad === 'switch' && __face() === 'B A Y X L ZR [home]'", "why": "A Switch pad: letters by position, so the south button reads B and the east one A"},
+  {"assert": "__hints() === 'B A Y X L R ZL ZR − + Home'", "why": "Switch hints"},
+  {"assert": "document.querySelector('[data-reading=buttons]').textContent === 'B + A + ZR'", "why": "Switch names in the readings"},
+  {"shot": "pad-family-switch"},
+  {"emit": "input", "payload": {}}, {"wait": 50},
+  {"assert": "document.documentElement.dataset.pad === 'switch'", "why": "State without a family (the keyboard, the browser mock) keeps the last pad's hints"},
+
+  {"emit": "input", "payload": {"family": "xbox", "a": true}}, {"wait": 50},
+  {"assert": "document.documentElement.dataset.pad === 'xbox' && __face() === 'A B X Y LB RT G' && document.querySelector('[data-reading=buttons]').textContent === 'A'", "why": "An Xbox pad used again brings its letters back"},
+  {"assert": "__hints() === 'A B X Y LB RB LT RT View ☰ Guide'", "why": "and its hints"},
+  {"shot": "pad-family-xbox"},
+  {"emit": "input", "payload": {"family": "unknown"}}, {"wait": 50},
+  {"assert": "document.documentElement.dataset.pad === 'xbox'", "why": "An unknown family is ignored"},
+  {"emit": "input", "payload": {}}
+]

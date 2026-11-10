@@ -1,12 +1,14 @@
-//! The pad: XInput for all four slots, including Guide. Emits `input` (pad state on change) and
+//! The pad: XInput for all four slots, including Guide, plus PlayStation and Switch pads over HID (`hid.rs`, row C1). Emits `input` (pad state on change) and
 //! `guide` (`{kind: "tap" | "hold"}`). The page does repeat, acceleration and focus (row A3).
 //! Mouse mode (`system::mouse`) and Guide over a running game (`games::guide`) see the pad first (row A7, A5).
 //! `PADWAKE_TEST=1` adds a virtual pad driven through a named pipe (`test_hook.rs`).
 
+mod hid;
 mod test_hook;
 mod xinput;
 
-pub use xinput::{last_change, last_pad, Pad};
+pub use hid::pads as hid_pads;
+pub use xinput::{last_change, last_pad, muted, Pad};
 
 use tauri::plugin::{Builder, TauriPlugin};
 use tauri::Runtime;
@@ -16,6 +18,7 @@ pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
         .invoke_handler(tauri::generate_handler![rumble])
         .setup(|app, _api| {
             test_hook::start();
+            hid::start();
             xinput::start(app.clone());
             Ok(())
         })
