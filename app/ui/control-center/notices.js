@@ -185,7 +185,7 @@ host.on('game', ({ state }) => { if (state === 'launching') warm(); });
 // shader programs for them (the cards, the scrims): 250–330 ms with every frame held, so the first Guide tap after a
 // start showed the bar at ≈650 ms instead of ≈300 (row A7; Chromium trace: RasterDecoderImpl::DoEndRasterCHROMIUM
 // waiting on ANGLE's shader compiles). The programs stay compiled for the life of the GPU process.
-// Home's launch transition calls this while the screen holds still (the UI is out, the art waits for the navy):
+// Home's launch transition calls this while the screen holds still (the UI is out, the art waits for the launch screen):
 // Control Center draws at a hair's opacity exactly as it will over this game (its card, the notifications, the
 // scrims), held until its frames run smooth again, so the raster and the compiles are done. Once per kind of card
 // (with or without art) per start. Resolves when it is popped.
@@ -210,16 +210,12 @@ export function warmControlCenter(app, g) {
     .finally(() => { if (app.top?.id === 'control-center' && app.top.el.classList.contains('warm')) app.pop(); });
 }
 
-// updates (cloud area): a toast once a new version has downloaded, and on the first start after an update
-// (Home loads under the start screen, and the first check runs 60 s after a start: a toast over "Press any button"
-// would be gone before anyone looked, so it waits until the start screen has gone)
-function afterStart(fn) {
-  const start = document.getElementById('screen-start');
-  if (!start?.classList.contains('on')) return fn();
-  const watch = new MutationObserver(() => { if (!start.classList.contains('on')) { watch.disconnect(); fn(); } });
-  watch.observe(start, { attributes: true, attributeFilter: ['class'] });
-}
-const ready = u => afterStart(() => toast({ title: 'System Software', message: `Version ${u.latest} is ready to install.`, icon: 'glyph:update' }));
+// updates (cloud area): a toast once a new version has downloaded, and on the first start after an update. Both wait
+// for the first Home (onHome, below): Home loads under the start screen, and a toast over "Press any button" would be
+// gone before anyone looked. "Updated to" used to play 1.5 s into the start, under it, so nobody saw it.
+let homeShown;
+const firstHome = new Promise(done => { homeShown = done; });
+const ready = u => firstHome.then(() => toast({ title: 'System Software', message: `Version ${u.latest} is ready to install.`, icon: 'glyph:update' }));
 let updateState = null;
 host.on('update', u => {
   if (u.state === 'ready' && updateState !== 'ready') ready(u);
@@ -229,7 +225,7 @@ host.on('update', u => {
 host.cloud?.update().then(u => {
   const was = updateState;
   updateState = u.state;
-  if (u.updatedFrom) setTimeout(() => toast({ title: 'System Software', message: `Updated to version ${u.current}.`, icon: 'glyph:update' }), 1500);
+  if (u.updatedFrom) firstHome.then(() => toast({ title: 'System Software', message: `Updated to version ${u.current}.`, icon: 'glyph:update' }));
   else if (u.state === 'ready' && was !== 'ready') ready(u);
 }).catch(() => {});
 
@@ -286,7 +282,7 @@ function onHome(fn) {
     if (!check()) watch.observe(document.getElementById('stage'), { attributes: true, attributeFilter: ['class'], subtree: true, childList: true });
   });
 }
-onHome(() => { homeSeen = true; recapNotice(); nextMonth(); });
+onHome(() => { homeSeen = true; homeShown(); recapNotice(); nextMonth(); });
 host.on('users', () => recapNotice());
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') recapNotice(); });
 export const checkRecapNotice = recapNotice; // tests

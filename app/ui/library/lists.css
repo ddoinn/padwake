@@ -32,9 +32,9 @@
   font-size: 21px; line-height: 29px; font-weight: 400; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 #screen-library .ltile .lnum { position: absolute; left: 18px; top: 254px; width: 260px; font-size: 18px; line-height: 25px;
   color: #bdbdbd; white-space: nowrap; }
-/* a smart list's filter glyph in the lock icon's slot: inset 25 px from the right, 22 px from the top */
-#screen-library .ltile .spark { position: absolute; right: 21px; top: 18px; width: 28px; height: 28px;
-  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, .6)); }
+/* a smart list's filter glyph: in the count line, before the count, at its size and colour (top-right it sat on the
+   covers' art) */
+#screen-library .ltile .spark { display: inline-block; width: 18px; height: 18px; margin-right: 7px; vertical-align: -2px; }
 #screen-library .ltile .spark svg { display: block; width: 100%; height: 100%; }
 
 /* New List: a centred + at 45 % of the tile, its label where a cover's title goes */

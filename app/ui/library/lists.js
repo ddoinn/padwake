@@ -9,7 +9,8 @@
 // Layout (design/ps5/2-library.md): "Lists: N" in the count line's slot (cap 288), then the cover grid: 296 px tiles,
 // 5 columns at pitch 320 from (172, 338); a scrolled row pins its top at y 280. A tile is the system-app tile of §1.4:
 // the charcoal gradient, here with up to four of the list's covers on it, its name and count bottom-left over the
-// cover's bottom shade, and a small glyph top-right on a smart list. New List has a centred + (45 % of the tile).
+// cover's bottom shade, and on a smart list a small filter glyph before the count (in the caption, never over the
+// covers). New List has a centred + (45 % of the tile).
 // Motion is the Library's: the ring fades in after 140 ms over 140 ms, focus jumps (no glide), rows scroll on the
 // measured settle, art fades in once decoded (§1.10), the tab fades in after the 200 ms empty page (§2).
 
@@ -35,7 +36,7 @@ export const SMART = [
 
 const ICONS = {
   // a filter: the list fills itself. A line icon, as Settings' and Control Center's (2.6 px at size, round ends).
-  smart: '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16l-6.2 7.6v5.9l-3.6 1.8v-7.7Z"/></svg>',
+  smart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16l-6.2 7.6v5.9l-3.6 1.8v-7.7Z"/></svg>',
   plus: '<svg viewBox="0 0 134 134"><path d="M67 30v74M30 67h74" stroke="#fff" stroke-width="7" stroke-linecap="round"/></svg>',
 };
 
@@ -237,9 +238,9 @@ function tile(t) {
     pics.append(cell);
   }
   el.append(pics);
-  el.insertAdjacentHTML('beforeend', `<div class="lshade"></div><div class="lname"></div><div class="lnum"></div>${t.kind === 'smart' ? `<div class="spark">${ICONS.smart}</div>` : ''}`);
+  el.insertAdjacentHTML('beforeend', `<div class="lshade"></div><div class="lname"></div><div class="lnum">${t.kind === 'smart' ? `<span class="spark">${ICONS.smart}</span>` : ''}<span></span></div>`);
   el.querySelector('.lname').textContent = t.name;
-  el.querySelector('.lnum').textContent = countText(t.games.length);
+  el.querySelector('.lnum span:last-child').textContent = countText(t.games.length);
   return el;
 }
 

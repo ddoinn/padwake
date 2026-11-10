@@ -13,6 +13,7 @@
   {"assert": "JSON.stringify(__lists.state().games[5]) === JSON.stringify(['red-dead-redemption-2'])", "why": "Not Played in 3 Months: not God of War (100% complete) or Cyberpunk (dropped)"},
   {"assert": "JSON.stringify(__lists.state().games[6]) === JSON.stringify(['celeste', 'hades']) && __lists.state().counts[6] === 2", "why": "your list shows its games in the library, not the one whose folder is gone"},
   {"assert": "document.querySelector('#screen-library .lcount').textContent === 'Lists: 7' && getComputedStyle(document.querySelector('#screen-library .sortbtn')).display === 'none'", "why": "the count line counts the lists; no sort button over the tiles"},
+  {"assert": "(() => { const smart = [...document.querySelectorAll('#screen-library .ltile.smart')], r = e => e.getBoundingClientRect(); return smart.length === 6 && smart.every(t => { const s = t.querySelector('.lnum > .spark'), n = t.querySelector('.lname'); return s && r(s).top >= r(n).bottom && r(s).top >= r(t.querySelector('.lshade')).top && r(s).bottom <= r(t).bottom; }) && !document.querySelector('#screen-library .ltile:not(.smart) .spark'); })()", "why": "each smart list's filter glyph sits in its count line, under the name in the bottom shade, never up on the covers; your lists have none"},
   {"shot": "lists-tab"},
 
   {"key": "Enter"}, {"wait": 800},

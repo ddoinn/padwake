@@ -3,7 +3,7 @@
 //! - Launch: a store game whose launcher starts it (Steam, Epic, Xbox) is opened by its link, and the session waits up
 //!   to `LAUNCHER_GRACE` for the game to start from its folder (an EA game's exe may hand itself to the EA app, so it
 //!   waits too). Any other game's command runs in a job object (`session.rs`); the app sleeps (hidden, web view suspended) meanwhile.
-//!   A game doesn't show the desktop while it loads: the app stays up on Home's navy launch screen until another window
+//!   A game doesn't show the desktop while it loads: the app stays up on Home's launch screen until another window
 //!   fills the screen (`cover`), then sleeps.
 //! - Tracking is an OS wait on the job, then on processes run from the game's folder (launcher stubs). A foreground hook
 //!   (`front.rs`) notes the game's window when it first comes to the front: "Ready to play".
