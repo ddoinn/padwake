@@ -12,7 +12,7 @@ export const ICONS = {
   savedData: svg('<path d="M10.5 28h15.5a7 7 0 0 0 1.2-13.9A9.5 9.5 0 0 0 9 13.4 7.3 7.3 0 0 0 10.5 28z"/><path d="M18 24v-8.5M14.2 19.3 18 15.5l3.8 3.8"/>'),
   users: svg('<circle cx="14" cy="12" r="5.5"/><path d="M4 30c0-6 4.5-10 10-10s10 4 10 10"/><circle cx="25.5" cy="11" r="4.2"/><path d="M26 19.5c4 .5 6.5 4 6.5 9"/>'),
   power: svg('<path d="M18 4v13"/><path d="M10.2 9.2a12 12 0 1 0 15.6 0"/>'),
-  system: svg('<path d="M5 9h26M5 18h26M5 27h26"/><circle cx="12" cy="9" r="3.2" fill="#2a262c"/><circle cx="24" cy="18" r="3.2" fill="#2a262c"/><circle cx="15" cy="27" r="3.2" fill="#2a262c"/>'),
+  system: svg('<path d="M5 9h26M5 18h26M5 27h26"/><circle cx="12" cy="9" r="3.2" fill="#292929"/><circle cx="24" cy="18" r="3.2" fill="#292929"/><circle cx="15" cy="27" r="3.2" fill="#292929"/>'),
 };
 
 export const CHECK = '<svg viewBox="0 0 22 16"><path d="M1.5 8.5l6 6L20.5 1.5"/></svg>';
@@ -20,7 +20,7 @@ export const CHECK = '<svg viewBox="0 0 22 16"><path d="M1.5 8.5l6 6L20.5 1.5"/>
 // Wi-Fi strength as four bars (0..100 → 1..4 lit) and a padlock for secured networks
 export function bars(signal) {
   const lit = signal >= 75 ? 4 : signal >= 50 ? 3 : signal >= 25 ? 2 : 1;
-  const bar = (k, h) => `<rect x="${k * 7 + 1}" y="${26 - h}" width="4" height="${h}" rx="1" fill="${k < lit ? '#c7c7d5' : 'rgba(255,255,255,.18)'}" stroke="none"/>`;
+  const bar = (k, h) => `<rect x="${k * 7 + 1}" y="${26 - h}" width="4" height="${h}" rx="1" fill="${k < lit ? '#cccccc' : 'rgba(255,255,255,.18)'}" stroke="none"/>`;
   return `<svg viewBox="0 0 28 28">${bar(0, 7)}${bar(1, 12)}${bar(2, 18)}${bar(3, 24)}</svg>`;
 }
 export const LOCK = '<svg viewBox="0 0 22 28"><rect x="2" y="12" width="18" height="14" rx="2"/><path d="M6 12V8a5 5 0 0 1 10 0v4"/></svg>';

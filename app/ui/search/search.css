@@ -14,8 +14,8 @@
 
 /* the field: x 172–1748, y 150–221, as the keyboard's (keyboard.css); glyph 31 px at (197, 169), text x 242 */
 #screen-search .field { position: absolute; left: 172px; top: 150px; width: 1576px; height: 71px; background: rgba(6, 8, 12, .72);
-  box-shadow: inset 0 -3px 0 rgba(170, 170, 186, .32); }
-#screen-search .field.focus { box-shadow: inset 0 -3px 0 rgba(170, 170, 186, .32), 0 0 0 3px rgba(4, 4, 10, .9), 0 0 0 6px rgba(255, 255, 255, .8); }
+  box-shadow: inset 0 -3px 0 rgba(175, 175, 175, .32); }
+#screen-search .field.focus { box-shadow: inset 0 -3px 0 rgba(175, 175, 175, .32), 0 0 0 3px rgba(4, 4, 10, .9), 0 0 0 6px rgba(255, 255, 255, .8); }
 #screen-search .field .glyph, #screen-search .osk-field::before { position: absolute; left: 25px; top: 19px; width: 31px; height: 31px; color: #fff; }
 #screen-search .field .glyph svg { display: block; width: 31px; height: 31px; }
 #screen-search .field .q, #screen-search .field .ph { position: absolute; left: 70px; right: 32px; top: 0; height: 68px; line-height: 68px;

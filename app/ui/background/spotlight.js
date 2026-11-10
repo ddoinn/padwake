@@ -1,5 +1,6 @@
-// The spotlight background (design/ps5/3-settings-a.md §1.1 and motion row 21): a dark warm-grey left, a rose-beige
-// spotlight from above x ≈300, floor haze bottom-left, near-black navy on the right. It is alive, as on the PS5.
+// The spotlight background (design/ps5/3-settings-a.md §1.1 and motion row 21): a dark grey left, a soft spotlight from
+// above x ≈300, floor haze bottom-left, near-black on the right. It is alive, as on the PS5. The footage's warm rose
+// light and navy right are kept as grey of the same brightness (row B5: Padwake has no hue of its own).
 //
 //   mount(el) → root   prepends <div class="spot"> to el (a screen) and returns it; style dims on the root (opacity).
 //                      It moves only while el's screen is shown (.screen.on) and the window is visible, and picks up
@@ -21,12 +22,12 @@ const RATE = 2;
 const SINE = 'cubic-bezier(.37, 0, .63, 1)';
 
 const TONE = `
-2b262c 726160 705f5e 3a3236 1a1921 0e0f1a 090b16 070814 050513 030311 01010f 000010
-2a242a 473d40 55494b 453c40 2e2930 201f27 161722 0e0f1b 090916 060614 020211 000010
-252128 352e33 3d353a 393237 2d292f 211f26 17161f 0e0f19 090915 050513 030311 010110
-211f26 2b272d 312c32 322d33 2b282e 232128 1a1920 12121b 0b0b17 070714 030311 010110
-27272e 2f2e35 333339 333238 2d2c33 25242c 1e1d24 16151e 0f0f19 090a16 050513 020210
-36353d 3d3c44 403f46 3c3c43 36353c 2d2c33 25232b 1c1c24 14151e 0f0f1a 0b0b17 070714`;
+2a2a2a 666666 646464 363636 1c1c1c 121212 0e0e0e 0c0c0c 0a0a0a 080808 060606 050505
+282828 414141 4e4e4e 404040 2d2d2d 222222 1a1a1a 131313 0d0d0d 0b0b0b 070707 050505
+252525 323232 393939 363636 2c2c2c 222222 191919 121212 0d0d0d 0a0a0a 080808 060606
+222222 2a2a2a 303030 313131 2b2b2b 242424 1c1c1c 151515 0f0f0f 0b0b0b 080808 060606
+292929 313131 353535 343434 2f2f2f 272727 202020 181818 121212 0e0e0e 0a0a0a 070707
+383838 3f3f3f 424242 3e3e3e 383838 2f2f2f 262626 1f1f1f 181818 131313 0f0f0f 0b0b0b`;
 const grid = TONE.trim().split('\n').map(line => line.trim().split(/\s+/).map(h => [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16))));
 
 // Catmull-Rom through the cell centres (160×180 px cell averages at 438.5 s), clamped at the edges; x, y in stage px
@@ -49,12 +50,12 @@ const breathe = [{ opacity: 1, easing: SINE }, { opacity: 0, easing: SINE }, { o
 
 // Layers: a box in stage px (drawn at a fifth of it), a colour, an alpha at a stage point, and animations
 // [keyframes, period ms, ms into the period at start].
-const GLOW = { box: [0, 0, 1300, 1080], rgb: [214, 186, 180],
+const GLOW = { box: [0, 0, 1300, 1080], rgb: [193, 193, 193],
   // a cone from (310, -120), axis 6° right of straight down, brightest at the top
   a(x, y) { const dx = x - 310, dy = y + 120, th = Math.atan2(dx, dy) * DEG, r = Math.hypot(dx, dy);
     return 0.46 * Math.exp(-(((th - 6) / 20) ** 2) - ((r / 620) ** 2)); },
   anim: [[breathe, 26000, 2000]] };
-const HAZE = { box: [-100, 760, 1500, 320], rgb: [124, 122, 132],
+const HAZE = { box: [-100, 760, 1500, 320], rgb: [126, 126, 126],
   a(x, y) { return 0.07 * Math.exp(-(((x - 480) / 520) ** 2) - (((y - 1010) / 120) ** 2)); },
   anim: [[breathe, 19000, 5000], [[{ transform: 'translateX(-70px)', easing: SINE }, { transform: 'translateX(70px)', easing: SINE },
     { transform: 'translateX(-70px)' }], 23000, 9000]] };
@@ -62,10 +63,10 @@ const HAZE = { box: [-100, 760, 1500, 320], rgb: [124, 122, 132],
 const SRC = [300, -160], SWEEP = 27000, SWEEP_AT = 21000;
 const polar = (x, y) => [Math.atan2(x - SRC[0], y - SRC[1]) * DEG, Math.hypot(x - SRC[0], y - SRC[1])];
 const reach = r => smooth(80, 320, r) * Math.exp(-r / 1700);
-const sheet = (c, k) => ({ wedge: [c - 14, c + 6], rgb: [205, 186, 186],
+const sheet = (c, k) => ({ wedge: [c - 14, c + 6], rgb: [192, 192, 192],
   a(x, y) { const [th, r] = polar(x, y); return 0.06 * smooth(c - 12, c - 3, th) * (1 - smooth(c, c + 4, th)) * reach(r); },
   anim: [[bump, SWEEP, mod(SWEEP_AT - 3000 * k, SWEEP)]] });
-const SHAFT = { wedge: [48, 56], rgb: [205, 186, 186],
+const SHAFT = { wedge: [48, 56], rgb: [192, 192, 192],
   a(x, y) { const [th, r] = polar(x, y); return 0.09 * Math.exp(-(((th - 52) / 1.4) ** 2)) * reach(r); },
   anim: [[bump, SWEEP, mod(SWEEP_AT - 13500, SWEEP)]] };
 const BEAMS = [22, 34, 46, 58, 70].map(sheet).concat(SHAFT);

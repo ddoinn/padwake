@@ -1,5 +1,7 @@
 // Avatars. A user's `avatar` is one of:
-//   one of AVATARS     our own, drawn here: six show the user's initial on a gradient, six a glyph
+//   one of AVATARS     our own, drawn here: six show the user's initial on a grey, six a glyph. Grey because Padwake has
+//                      no hue of its own (row B5); a game's art, a character or a picture brings colour. The ids are
+//                      the old colour presets', so saved users keep their choice.
 //   game:<id>          a game's square tile from the library
 //   char:<id>          a character (AniList, src-tauri users/characters.rs): user.image is its picture
 //   pic:<key>          one of the player's own pictures (users/pictures.rs): user.image
@@ -17,18 +19,18 @@ const GLYPHS = {
 };
 
 export const AVATARS = [
-  { id: 'ember', name: 'Ember', from: '#ff8a4c', to: '#d4214d' },
-  { id: 'tide', name: 'Tide', from: '#35c8ff', to: '#2350d4' },
-  { id: 'grove', name: 'Grove', from: '#55e08f', to: '#12806a' },
-  { id: 'dusk', name: 'Dusk', from: '#b086ff', to: '#5527bd' },
-  { id: 'bloom', name: 'Bloom', from: '#ff92dc', to: '#bd3394' },
-  { id: 'sun', name: 'Sun', from: '#ffd65e', to: '#ec7a14' },
-  { id: 'pad', name: 'Controller', from: '#5b6584', to: '#1d2133', glyph: 'pad' },
-  { id: 'star', name: 'Star', from: '#ffc95a', to: '#e0532a', glyph: 'star' },
-  { id: 'bolt', name: 'Bolt', from: '#7a8cff', to: '#2b2fa8', glyph: 'bolt' },
-  { id: 'moon', name: 'Moon', from: '#4fb2ff', to: '#3a2a9e', glyph: 'moon' },
-  { id: 'flame', name: 'Flame', from: '#ff6b5a', to: '#9e1a3c', glyph: 'flame' },
-  { id: 'leaf', name: 'Leaf', from: '#9be36b', to: '#1f7a4a', glyph: 'leaf' },
+  { id: 'ember', name: 'Graphite', from: '#5a5a5a', to: '#262626' },
+  { id: 'tide', name: 'Silver', from: '#8c8c8c', to: '#4a4a4a' },
+  { id: 'grove', name: 'Charcoal', from: '#3e3e3e', to: '#161616' },
+  { id: 'dusk', name: 'Stone', from: '#727272', to: '#363636' },
+  { id: 'bloom', name: 'Ash', from: '#666666', to: '#2e2e2e' },
+  { id: 'sun', name: 'Ink', from: '#2e2e2e', to: '#0c0c0c' },
+  { id: 'pad', name: 'Controller', from: '#4a4a4a', to: '#1c1c1c', glyph: 'pad' },
+  { id: 'star', name: 'Star', from: '#4a4a4a', to: '#1c1c1c', glyph: 'star' },
+  { id: 'bolt', name: 'Bolt', from: '#4a4a4a', to: '#1c1c1c', glyph: 'bolt' },
+  { id: 'moon', name: 'Moon', from: '#4a4a4a', to: '#1c1c1c', glyph: 'moon' },
+  { id: 'flame', name: 'Flame', from: '#4a4a4a', to: '#1c1c1c', glyph: 'flame' },
+  { id: 'leaf', name: 'Leaf', from: '#4a4a4a', to: '#1c1c1c', glyph: 'leaf' },
 ];
 
 const byId = new Map(AVATARS.map(a => [a.id, a]));

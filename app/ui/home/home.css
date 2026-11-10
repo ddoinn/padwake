@@ -13,31 +13,23 @@
   background: linear-gradient(90deg, rgba(0, 0, 0, .62) 0%, rgba(0, 0, 0, .5) 30%, rgba(0, 0, 0, .12) 58%, rgba(0, 0, 0, 0) 72%),
     linear-gradient(180deg, rgba(0, 0, 0, .4) 0, rgba(0, 0, 0, 0) 330px);
 }
-/* game launch (§1.10): under everything the navy radial, #0F1731 at the centre and bottom-centre, darker left, near-black
-   at the edges. It shows alone only for a game without art. */
-#screen-home .navy {
-  opacity: 0;
-  background: radial-gradient(1000px 800px at 1010px 900px, #0f1731 0%, #0f1731 45%, #0e152d 62%, #050c22 72%, #00000a 100%);
-  overflow: hidden;
-}
+/* game launch (§1.10's screen without its navy; row B5: colour only from game art): under everything Home's grey wash,
+   or the tile's colour (home.js loadingScreen). It shows alone only for a game without background art. */
+#screen-home .navy { opacity: 0; background: radial-gradient(ellipse at 78% 40%, #262626, #080808 70%, #000); overflow: hidden; }
 /* while the game loads (home.js loadingScreen): Home's background art stays where it was, so the launch screen fades in
-   without a cut, and pushes in very slowly. The scrim sinks the art into the navy at the foot, for the text. The logo or
-   name and the player's history rise in at Home's hero column (x 172) as the screen arrives (its cross-fade starts
-   467 ms after A); the spinner waits 1.3 s, so a game that is up at once never shows one, and the hint waits 20 s. Only
-   opacity and transform move; nothing runs without .loading. */
+   without a cut, and pushes in very slowly. The scrim sinks the art into black at the foot, for the text. The logo or
+   name and the player's history fade in at Home's hero column (x 172) with no movement, as Home's hero does, as the
+   screen arrives (its cross-fade starts 467 ms after A); the spinner waits 1.3 s, so a game that is up at once never
+   shows one, and the hint waits 20 s. Only opacity and transform move; nothing runs without .loading. */
 #screen-home .navy .lart { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; will-change: transform; }
 #screen-home .navy.hasart .lart { display: block; }
 #screen-home .navy .lscrim {
   position: absolute; inset: 0; display: none;
-  background: linear-gradient(0deg, #00000a 0, rgba(0, 0, 10, .86) 18%, rgba(0, 0, 10, .42) 42%, rgba(0, 0, 10, .14) 68%, rgba(0, 0, 10, .34) 100%),
-    linear-gradient(90deg, rgba(0, 0, 10, .55) 0, rgba(0, 0, 10, 0) 56%);
+  background: linear-gradient(0deg, #000 0, rgba(0, 0, 0, .86) 18%, rgba(0, 0, 0, .42) 42%, rgba(0, 0, 0, .14) 68%, rgba(0, 0, 0, .34) 100%),
+    linear-gradient(90deg, rgba(0, 0, 0, .55) 0, rgba(0, 0, 0, 0) 56%);
 }
 #screen-home .navy.hasart .lscrim { display: block; }
-#screen-home .navy .lglow {
-  position: absolute; left: 360px; top: 30px; width: 1200px; height: 880px; opacity: 0;
-  background: radial-gradient(closest-side, rgba(88, 132, 255, .22), rgba(52, 84, 200, .1) 55%, rgba(20, 32, 90, 0) 100%);
-}
-#screen-home .navy.hasart .lglow { display: none; }
+
 #screen-home .navy .lmark {
   position: absolute; left: 172px; bottom: 132px; width: 1080px; opacity: 0;
   display: flex; flex-direction: column; align-items: flex-start;
@@ -54,20 +46,16 @@
 #screen-home .navy .larc { stroke: #fff; stroke-dasharray: 26 101; }
 #screen-home .navy .lhint { position: absolute; right: 172px; bottom: 84px; font-size: 22px; line-height: 30px; color: rgba(255, 255, 255, .62); opacity: 0; }
 #screen-home .navy.loading .lart { animation: lart-push 60s linear forwards; }
-#screen-home .navy.loading .lglow { animation: lglow-in 900ms cubic-bezier(.22, 1, .36, 1) 400ms forwards, lglow-drift 9s ease-in-out 1300ms infinite alternate; }
-#screen-home .navy.loading .lmark { animation: lmark-in 600ms cubic-bezier(.22, 1, .36, 1) 500ms forwards; }
-#screen-home .navy.loading .lstatus { animation: lfade-in 300ms ease-out 1300ms forwards; }
+#screen-home .navy.loading .lmark { animation: lfade-in 300ms var(--ease-out) 500ms forwards; }
+#screen-home .navy.loading .lstatus { animation: lfade-in 300ms var(--ease-out) 1300ms forwards; }
 #screen-home .navy.loading .lstatus svg { animation: lspin 800ms linear infinite; }
-#screen-home .navy.loading .lhint { animation: lfade-in 300ms ease-out 20s forwards; }
+#screen-home .navy.loading .lhint { animation: lfade-in 300ms var(--ease-out) 20s forwards; }
 @keyframes lart-push { to { transform: scale(1.07); } }
-@keyframes lglow-in { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: none; } }
-@keyframes lglow-drift { from { transform: none; } to { transform: translate(60px, -24px) scale(1.08); } }
-@keyframes lmark-in { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
 @keyframes lfade-in { to { opacity: 1; } }
 @keyframes lspin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
   #screen-home .navy.loading .lart { animation: none; }
-  #screen-home .navy.loading .lglow, #screen-home .navy.loading .lmark { animation: lfade-in 300ms ease-out 500ms forwards; }
+
 }
 #screen-home .top, #screen-home .rowwrap, #screen-home .hubhead, #screen-home .cards { position: absolute; inset: 0; }
 /* .001, not 0: invisible, but painted ahead, so Down never waits to paint them */
@@ -164,7 +152,7 @@
 #screen-home .box .cover span { position: absolute; left: 24px; right: 24px; top: 24px; font-size: 34px; line-height: 42px; font-weight: 300; overflow-wrap: anywhere; }
 #screen-home .box::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 190px; background: linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, .55) 45%, rgba(0, 0, 0, .85)); }
 #screen-home .box .chip {
-  position: absolute; z-index: 1; left: 24px; top: 270px; height: 31px; padding: 0 10px; border: 1px solid #c8ced4;
+  position: absolute; z-index: 1; left: 24px; top: 270px; height: 31px; padding: 0 10px; border: 1px solid #cecece;
   font-size: 18px; line-height: 29px; font-weight: 600; white-space: nowrap;
 }
 #screen-home .box .last { position: absolute; z-index: 1; left: 24px; top: 316px; font-size: 22px; line-height: 30px; font-weight: 600; white-space: nowrap; }
@@ -180,7 +168,7 @@
 #screen-home .cards .strip { position: absolute; left: 0; top: 1030px; transform: translateX(172px); }
 /* a card is one picture (§1.5, t0038): no panel under it. The ring is the tile row's: 3 px at 60 % white, 3 px out. */
 #screen-home .card {
-  position: absolute; left: 0; top: 0; width: 502px; height: 502px; border-radius: 6px; background: #14161b;
+  position: absolute; left: 0; top: 0; width: 502px; height: 502px; border-radius: 6px; background: #171717;
   outline: 3px solid transparent; outline-offset: 3px;
 }
 #screen-home .card.focus { outline-color: rgba(255, 255, 255, .6); }
@@ -204,14 +192,14 @@
 #screen-home .card.news .t {
   top: auto; bottom: 65px; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
 }
-#screen-home .card .s { top: 452px; font-size: 20px; line-height: 28px; color: #a9abb2; white-space: nowrap; }
+#screen-home .card .s { top: 452px; font-size: 20px; line-height: 28px; color: #adadad; white-space: nowrap; }
 /* About: the one card without a picture. The glass of the menus, the game's logo, then the store text. */
-#screen-home .card.about { background: linear-gradient(160deg, #262a33 0%, #15181e 55%, #0c0e12 100%); padding: 36px 32px 0; }
+#screen-home .card.about { background: linear-gradient(160deg, #2c2c2c 0%, #191919 55%, #0f0f0f 100%); padding: 36px 32px 0; }
 #screen-home .card .alogo { height: 84px; display: flex; align-items: center; }
 #screen-home .card .alogo img { display: block; max-width: 300px; max-height: 84px; object-fit: contain; object-position: left center; }
 #screen-home .card .alogo.name { font-size: 30px; line-height: 40px; font-weight: 300; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #screen-home .card .atext {
-  margin-top: 28px; font-size: 22px; line-height: 34px; color: #c9cbd1; display: -webkit-box; -webkit-line-clamp: 9;
+  margin-top: 28px; font-size: 22px; line-height: 34px; color: #cccccc; display: -webkit-box; -webkit-line-clamp: 9;
   -webkit-box-orient: vertical; overflow: hidden;
 }
 
@@ -237,7 +225,7 @@
 
 /* ---------- Options menu and Information (the Control Center panel look: dark gradient, outlined focus row) ---------- */
 #screen-home .menu, #screen-home .info {
-  position: absolute; visibility: hidden; opacity: 0; border-radius: 12px; background: linear-gradient(135deg, #1c1d22, #090d13);
+  position: absolute; visibility: hidden; opacity: 0; border-radius: 12px; background: linear-gradient(135deg, #1e1e1e, #0e0e0e);
   box-shadow: 0 12px 40px rgba(0, 0, 0, .5);
 }
 /* as wide as its longest item, at least 460 px; a long list (Display for This Game's modes) scrolls a whole item at a time */
@@ -257,7 +245,7 @@
 #screen-home .info { left: 570px; top: 230px; width: 780px; padding: 34px 40px 22px; }
 #screen-home .info .head { font-size: 36px; line-height: 50px; font-weight: 300; margin-bottom: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #screen-home .info .row { display: flex; justify-content: space-between; gap: 30px; height: 72px; align-items: center; border-top: 1px solid rgba(255, 255, 255, .1); }
-#screen-home .info .row span { font-size: 24px; color: #a9abb2; white-space: nowrap; }
+#screen-home .info .row span { font-size: 24px; color: #adadad; white-space: nowrap; }
 #screen-home .info .row b { font-size: 26px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ---------- the running game (row A5): a play mark on its tile, "│ Running" after its label (the PS5's suffix grey) ---------- */

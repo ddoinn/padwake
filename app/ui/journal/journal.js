@@ -14,6 +14,7 @@
 import * as keyboard from '../keyboard/keyboard.js';
 import { STATUSES, statusOf, EMPTY, NOTE_MAX, hours, date, ago, stars, tint, squareArt, percentOf } from './shared.js';
 import { TROPHIES, earned, CUP } from './trophies.js';
+import { artWash, NEUTRAL_WASH } from '../art-tint.js';
 
 const FRAME = 1000 / 60;
 const ROWS_Y = 452, ROW_H = 88, PITCH = 100, NOTE_H = 136, ROW_W = 900, X0 = 172;
@@ -106,10 +107,11 @@ function show(g) {
   journal = { ...EMPTY, ...(g.journal ?? {}) };
   forgetArmed = 0;
   root.classList.toggle('removed', !!g.removedAt);
-  // background: the game's art, else a tint
+  // background: the game's art, else a dark wash in its square art's colour (art-tint.js), else grey
   const bg = g.art?.background;
   $.bgimg.classList.remove('in');
-  $.jpbg.style.background = bg ? '#000' : tint(g.id);
+  $.jpbg.style.background = bg ? '#000' : NEUTRAL_WASH;
+  if (!bg && squareArt(g)) artWash(host.fileUrl(squareArt(g))).then(w => { if (w && game === g) $.jpbg.style.background = w; });
   if (bg) {
     $.bgimg.src = host.fileUrl(bg);
     $.bgimg.decode().then(() => $.bgimg.classList.add('in'), () => {});

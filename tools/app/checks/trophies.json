@@ -39,7 +39,7 @@
   {"emit": "game", "payload": {"id": "hades", "kind": "game", "state": "exited", "front": "game", "played": 200}},
   {"wait": 6950},
   {"assert": "__input.state.lastSound === 'trophy-gold'", "why": "gold rings higher"},
-  {"assert": "getComputedStyle(document.querySelector('.toast.trophy.gold .toast-icon'), '::before').animationName === 'trophy-flare'", "why": "gold flares behind the cup"},
+  {"assert": "getComputedStyle(document.querySelector('.toast.trophy.gold .toast-icon'), '::before').animationName === 'none'", "why": "gold rings higher but looks like the others: no flare (row B5)"},
   {"shot": "trophy-toast-gold"},
   {"wait": 5600},
   {"eval": "__app.host.settings.set({uiSounds: false}).then(() => __mock.settings.uiSounds)"},
