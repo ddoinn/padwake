@@ -165,6 +165,34 @@ pub fn trophies_earned(before: (u64, u32), after: (u64, u32)) -> Vec<String> {
     TROPHIES.iter().filter(|(_, earned)| earned(after.0, after.1) && !earned(before.0, before.1)).map(|(id, _)| id.to_string()).collect()
 }
 
+/// Row B4: replays `log` back from each game's totals today (seconds, sessions; `None` for a game the library no longer
+/// has) and puts on each game session the Padwake trophies it earned. A game's totals at a date are today's totals minus
+/// the sessions logged after it, so no trophy dates are stored. Time from before the log began stays in the totals, so a
+/// trophy earned before then isn't put on a logged session. A line's own `trophies` (B1b) are replaced: two PCs' logs
+/// merged would both carry the same trophy, while a replay crosses each one once. Media lines get none.
+pub fn replay(log: &mut [Session], totals: impl Fn(&str) -> Option<(u64, u32)>) {
+    let mut at: std::collections::HashMap<String, Option<(u64, u32)>> = std::collections::HashMap::new();
+    let mut order: Vec<usize> = (0..log.len()).collect();
+    // newest first; sessions never overlap, so the start orders them
+    order.sort_by_key(|&i| std::cmp::Reverse((log[i].start, log[i].end)));
+    for i in order {
+        let s = &mut log[i];
+        if s.kind.is_some() || s.game.is_empty() {
+            s.trophies.clear();
+            continue;
+        }
+        let after = *at.entry(s.game.clone()).or_insert_with(|| totals(&s.game));
+        s.trophies = match after {
+            Some(after) => {
+                let before = (after.0.saturating_sub(s.secs), after.1.saturating_sub(1));
+                at.insert(s.game.clone(), Some(before));
+                trophies_earned(before, after)
+            }
+            None => Vec::new(),
+        };
+    }
+}
+
 /// `user`'s log.
 pub fn file(user: &str) -> PathBuf {
     crate::users::dir_of(user).join("sessions.jsonl")
@@ -354,6 +382,66 @@ mod tests {
             assert!(js.contains(&format!("id: '{id}'")), "{id} is in trophies.js");
         }
         assert_eq!(js.matches("{ id: '").count(), TROPHIES.len());
+    }
+
+    /// Row B4: a game's totals at a date are today's minus the sessions after it.
+    #[test]
+    fn a_replay_puts_each_trophy_on_the_session_that_crossed_it() {
+        let h = 3600;
+        let game = |id: &str, secs: u64, end: u64| Session::ended(id, secs, end);
+        // Hades: 2 h before the log began (1 session), then 4 logged sessions; Celeste: all of it logged
+        let mut log = vec![
+            game("hades", 30 * 60, 10_000_000),
+            game("celeste", 50, 20_000_000),
+            game("hades", 7 * h, 30_000_000),
+            Session { game: String::new(), kind: Some("media".into()), app: Some("youtube".into()), trophies: vec!["first-steps".into()], ..Session::ended("", 5 * h, 40_000_000) },
+            game("celeste", 20, 50_000_000),
+            game("hades", h + 30 * 60, 60_000_000),
+            game("gone", 2 * h, 70_000_000),
+            // logged by B1b with what the PC knew then; the replay decides
+            Session { trophies: vec!["first-steps".into()], ..game("hades", 60, 80_000_000) },
+        ];
+        let totals = |id: &str| match id {
+            "hades" => Some((2 * h + 30 * 60 + 7 * h + h + 30 * 60 + 60, 5)),
+            "celeste" => Some((70, 2)),
+            _ => None,
+        };
+        replay(&mut log, totals);
+        let earned: Vec<Vec<&str>> = log.iter().map(|s| s.trophies.iter().map(String::as_str).collect()).collect();
+        assert_eq!(
+            earned,
+            [
+                vec![],             // Hades already had First Steps from before the log
+                vec![],             // Celeste: 50 s, not yet a minute
+                vec![],             // Hades 2.5 h → 9.5 h
+                vec![],             // media earns nothing, and loses what it said
+                vec!["first-steps"], // Celeste crosses a minute at 70 s
+                vec!["invested"],   // Hades crosses 10 h at 11 h
+                vec![],             // a game the library no longer has
+                vec![],             // Hades' last session crossed nothing
+            ]
+        );
+        // the log's order doesn't matter (a merged log is in start order, an appended one in end order)
+        let mut reversed: Vec<Session> = log.iter().rev().cloned().collect();
+        replay(&mut reversed, totals);
+        assert_eq!(reversed.iter().rev().map(|s| s.trophies.clone()).collect::<Vec<_>>(), log.iter().map(|s| s.trophies.clone()).collect::<Vec<_>>());
+        // totals smaller than the log (another PC's sessions merged in) never go below zero
+        let mut short = vec![game("celeste", 40, 1_000), game("celeste", 40, 2_000)];
+        replay(&mut short, |_| Some((40, 1)));
+        assert_eq!(short.iter().map(|s| s.trophies.len()).collect::<Vec<_>>(), [0, 0]);
+        let mut first = vec![game("celeste", 90, 1_000), game("celeste", 40, 2_000)];
+        replay(&mut first, |_| Some((130, 2)));
+        assert_eq!(first[0].trophies, ["first-steps"]);
+        assert!(first[1].trophies.is_empty());
+    }
+
+    #[test]
+    fn a_replay_of_ten_sessions_finds_regular_once() {
+        let mut log: Vec<Session> = (1..=12).map(|n| Session::ended("hades", 600, n * 1_000_000)).collect();
+        replay(&mut log, |_| Some((12 * 600, 12)));
+        let regular: Vec<usize> = log.iter().enumerate().filter(|(_, s)| s.trophies.contains(&"regular".to_string())).map(|(i, _)| i).collect();
+        assert_eq!(regular, [9], "the tenth session");
+        assert_eq!(log[0].trophies, ["first-steps"]);
     }
 
     #[test]

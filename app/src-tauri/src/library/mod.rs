@@ -248,6 +248,7 @@ pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
             journal,
             review,
             forget,
+            recap,
             collections::lists,
             collections::list_create,
             collections::list_rename,
@@ -505,6 +506,36 @@ fn set_journal(id: &str, journal: Journal) -> Result<Game, String> {
         }
     }
     Ok(g)
+}
+
+/// Row B4: what the current user's recaps are worked out from (`ui/journal/recaps.js`).
+#[derive(Serialize, Default)]
+struct RecapLog {
+    /// the session log, each game session with the Padwake trophies it earned (`sessions::replay`)
+    sessions: Vec<sessions::Session>,
+    /// journal status changes (games finished in a period)
+    events: Vec<events::Event>,
+}
+
+/// The current user's logs for their recaps. Nobody (unit tests): empty.
+#[tauri::command]
+fn recap() -> RecapLog {
+    let (user, totals) = {
+        let s = state();
+        let totals: std::collections::HashMap<String, (u64, u32)> =
+            s.games.iter().chain(&s.kept).map(|g| (g.id.clone(), (g.playtime_sec, g.sessions))).collect();
+        (s.user.clone(), totals)
+    };
+    if user.is_empty() {
+        return RecapLog::default();
+    }
+    recap_of(sessions::read(&sessions::file(&user)), events::read(&events::file(&user)), &totals)
+}
+
+fn recap_of(mut log: Vec<sessions::Session>, events: Vec<events::Event>, totals: &std::collections::HashMap<String, (u64, u32)>) -> RecapLog {
+    sessions::replay(&mut log, |id| totals.get(id).copied());
+    let events = events.into_iter().filter(|e| matches!(e.what, events::What::Status { .. })).collect();
+    RecapLog { sessions: log, events }
 }
 
 /// Takes a removed game out of this user's journal; with its art too once no other user has it in theirs. A game
@@ -1164,6 +1195,27 @@ mod tests {
         assert!(w.skipping && w.seen.is_none(), "nothing was scanned");
         assert_eq!(tick(&mut w, &root, &|| true), Tick::Skipped);
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Row B4: the recap gets the sessions with their trophies replayed, and only the journal's status changes.
+    #[test]
+    fn a_recap_replays_the_log_and_keeps_status_changes() {
+        let log = vec![sessions::Session::ended("hades", 3600, 5_000_000), sessions::Session::ended("hades", 30, 9_000_000)];
+        let at = |at, what| events::Event { at, what };
+        let evs = vec![
+            at(1, events::What::Started { v: "0.3.4".into(), restarted: false }),
+            at(2, events::What::Status { game: "hades".into(), status: Some(Status::Finished) }),
+            at(3, events::What::Rating { game: "hades".into(), rating: Some(5) }),
+            at(4, events::What::Note { game: "hades".into(), note: true }),
+        ];
+        let totals = std::collections::HashMap::from([("hades".to_string(), (3630, 2))]);
+        let r = recap_of(log, evs, &totals);
+        assert_eq!(r.sessions[0].trophies, ["first-steps"]);
+        assert!(r.sessions[1].trophies.is_empty());
+        assert_eq!(r.events.len(), 1);
+        let json = serde_json::to_string(&r).unwrap();
+        assert!(json.contains(r#""events":[{"at":2,"type":"status","game":"hades","status":"finished"}]"#), "{json}");
+        assert!(json.contains(r#""trophies":["first-steps"]"#), "{json}");
     }
 
     /// Also row B1: each session is a line in the log of whoever played it. The only test that sets a user.

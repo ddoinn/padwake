@@ -11,7 +11,9 @@ import { host } from './host.js';
 import { startInput } from './input/input.js';
 
 const FIRST = 'start'; // the light show and "Press any button", which reveals Home (?scene= skips it)
-const SCREENS = ['start', 'home', 'library', 'search', 'control-center', 'settings', 'media', 'journal', 'gallery', 'users'];
+const SCREENS = ['start', 'home', 'library', 'search', 'control-center', 'settings', 'media', 'journal', 'gallery', 'users', 'recap'];
+// a screen whose files live in another screen's folder
+const PATHS = { recap: 'journal/recap' };
 const stage = document.getElementById('stage');
 const loaded = new Map();
 // the host hears the top screen when it changes: over a running game, that's where the session's time goes (row B1b)
@@ -32,10 +34,11 @@ function fit() {
 async function load(id) {
   if (loaded.has(id)) return loaded.get(id);
   if (!SCREENS.includes(id)) throw new Error(`no screen ${id}`);
-  const css = Object.assign(document.createElement('link'), { rel: 'stylesheet', href: `./${id}/${id}.css` });
+  const path = PATHS[id] ?? `${id}/${id}`;
+  const css = Object.assign(document.createElement('link'), { rel: 'stylesheet', href: `./${path}.css` });
   const cssReady = new Promise(done => { css.onload = css.onerror = done; });
   document.head.append(css);
-  const [{ default: mod }] = await Promise.all([import(`./${id}/${id}.js`), cssReady]);
+  const [{ default: mod }] = await Promise.all([import(`./${path}.js`), cssReady]);
   const el = Object.assign(document.createElement('div'), { className: 'screen', id: `screen-${id}` });
   stage.append(el);
   const screen = { id, mod, el };

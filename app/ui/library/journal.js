@@ -2,15 +2,18 @@
 // time spent, status, stars and progress. library.js owns the header, tabs, sort button and menu, and routes input
 // here while this tab is on.
 //
-// Layout (stage px): "Played: N" and "Sort by: …" in the count line's slot (cap 288); a band of totals at y 338; then
-// 132 px rows at x 172, 1576 wide, from y 522 (pitch 156). The focused row pins its top at y 436, with the one before
-// it above; the first stays where it is. Motion is the Library's: the same row scroll settle, the ring fading in after
-// 140 ms. Rows near the view are drawn only, art fades in once decoded.
-// Buttons: A opens the game's journal page (ui/journal), Up from the first row goes to the tabs, Left to the sort
-// button, LT / RT jump 4 rows.
+// Layout (stage px): "Played: N" and "Sort by: …" in the count line's slot (cap 288); a band of totals at y 338; the
+// Recaps shelf at y 522 (row B4: 296 × 132 cards, pitch 320, five in view: "<Month> so far", then every past month
+// with a session, then years; journal/recaps.js); then 132 px rows at x 172, 1576 wide, from y 678 (pitch 156). The
+// focused row pins its top at y 436, with the one before it above; the first stays where it is. Motion is the
+// Library's: the same row scroll settle, the ring fading in after 140 ms. Rows near the view are drawn only, art fades
+// in once decoded.
+// Buttons: A opens the game's journal page (ui/journal) or a recap's pages (journal/recap.js), Up from the first row
+// goes to the shelf and from the shelf to the tabs, Left to the sort button, LT / RT jump 4 rows.
 
 import { statusOf, done, hours, ago, date, stars, tint, squareArt, STAR, percentOf } from '../journal/shared.js';
 import { earned as trophies } from '../journal/trophies.js';
+import { periods, build, span } from '../journal/recaps.js';
 
 export const SORTS = [
   { id: 'played', label: 'Recently played' },
@@ -19,7 +22,8 @@ export const SORTS = [
   { id: 'progress', label: 'Most achievements' },
   { id: 'az', label: 'Name (A - Z)' },
 ];
-const X0 = 172, W = 1576, ROW_H = 132, PITCH = 156, LIST_Y = 522, PIN_Y = 436, CLIP_Y = 260, VIEW_H = 1080;
+const X0 = 172, W = 1576, ROW_H = 132, PITCH = 156, LIST_Y = 678, PIN_Y = 436, CLIP_Y = 260, VIEW_H = 1080;
+const SHELF_Y = 522, CARD_W = 296, CARD_PITCH = 320, CARDS_IN_VIEW = 5;
 const PAGE = 4;
 const RING_IN = { delay: 140, ms: 140 };
 const TAB_FADE = { duration: 315, delay: 200, easing: 'cubic-bezier(.33, 0, .67, 1)' }; // §2 "Tab switch content"
@@ -29,6 +33,7 @@ let entries = [];
 let sortId = 'played';
 let index = 0, focused = false, scrollY = 0, scrollFrom = 0, scrollAnim = null, ringAnim = null;
 const rows = new Map(); // index → row element (near the view only)
+let recapLog = null, cards = [], card = 0, onShelf = false, shelfX = 0; // the Recaps shelf (row B4)
 
 try { sortId = localStorage.getItem('journal.sort') || sortId; } catch {}
 if (!SORTS.some(s => s.id === sortId)) sortId = 'played';
@@ -43,6 +48,7 @@ export function mount(c) {
     <div class="jview"><div class="jslide"><div class="jcontent">
       <div class="countline"><span class="jcount"></span><span class="jsortlabel"></span></div>
       <div class="jstats"></div>
+      <div class="jshelf"><div class="jstrip"></div></div>
       <div class="jlist"></div>
       <div class="jring"></div>
     </div></div></div>
@@ -50,11 +56,16 @@ export function mount(c) {
       you gave them, and they stay after you remove them. Rate a game, say how far you got and leave a note from its ☰
       menu on Home, or here.</div></div>`;
   c.root.querySelector('.bar').before(el);
-  for (const k of ['jview', 'jcontent', 'jcount', 'jsortlabel', 'jstats', 'jlist', 'jring', 'jempty']) $[k] = el.querySelector(`.${k}`);
+  for (const k of ['jview', 'jcontent', 'jcount', 'jsortlabel', 'jstats', 'jshelf', 'jlist', 'jring', 'jempty']) $[k] = el.querySelector(`.${k}`);
+  $.strip = $.jshelf.querySelector('.jstrip');
   $.el = el;
   host.on('library', () => reload());
   reload();
-  window.__journal = { state: () => ({ index, focused, sort: sortId, order: entries.map(g => g.id), scroll: scrollY }), sort: id => applySort(id) };
+  window.__journal = {
+    state: () => ({ index, focused, sort: sortId, order: entries.map(g => g.id), scroll: scrollY,
+      shelf: focused && onShelf ? card : null, recaps: cards.map(c => c.p.key), cards: cards.map(c => [c.p.label, c.sub]) }),
+    sort: id => applySort(id),
+  };
 }
 
 export const sort = () => sortId;
@@ -62,12 +73,16 @@ export const count = () => entries.length;
 
 export async function reload() {
   const keep = entries[index]?.id;
-  let list = [];
-  try { list = await host.library.journal(); } catch (e) { console.warn('journal', e); }
+  // the session log only while the tab is on (it reads a file)
+  const [list, log] = await Promise.all([
+    host.library.journal().catch(e => (console.warn('journal', e), [])),
+    $.el.classList.contains('on') ? host.library.recap().catch(e => (console.warn('recap', e), null)) : recapLog,
+  ]);
+  recapLog = log;
   entries = sorted(list ?? [], sortId);
   index = Math.max(0, entries.findIndex(g => g.id === keep));
   // a review from the journal page can move its game (sorted by rating): the list follows it
-  if (focused && scrollY !== scrollFor(index)) scrollTo(scrollFor(index), true);
+  if (focused && !onShelf && scrollY !== scrollFor(index)) scrollTo(scrollFor(index), true);
   paint();
 }
 
@@ -89,13 +104,16 @@ export function show(on) {
   if (on) {
     scrollTo(0, true);
     index = 0;
+    onShelf = false;
+    card = 0;
     reload();
     $.el.animate([{ opacity: 0 }, { opacity: 1 }], { ...TAB_FADE, fill: 'backwards' });
   } else blur();
 }
 
 export function focus(ring = RING_IN) {
-  if (!entries.length) return false;
+  if (!entries.length && !cards.length) return false;
+  if (!entries.length) onShelf = true; // no games yet: the shelf still has this month
   focused = true;
   placeFocus(ring);
   return true;
@@ -113,8 +131,9 @@ export function fadeOut(o) {
 
 export function action(name, e) {
   const n = entries.length;
+  if (onShelf) return shelfAction(name, e);
   if (!n) return name === 'left' ? ctx.toButton() : name === 'up' ? ctx.toTabs() : false;
-  if (name === 'up') return index > 0 ? move(index - 1) : (!e.held && ctx.toTabs());
+  if (name === 'up') return index > 0 ? move(index - 1) : (!e.held && toShelf());
   if (name === 'down') return index < n - 1 && move(index + 1);
   if (name === 'left') return !e.held && ctx.toButton();
   if (name === 'right') return false;
@@ -128,11 +147,89 @@ export function action(name, e) {
   return false;
 }
 
+// ---------- the Recaps shelf (row B4) ----------
+function shelfAction(name, e) {
+  if (name === 'up') return !e.held && ctx.toTabs();
+  if (name === 'down') return move(0);
+  if (name === 'left') return card > 0 ? toCard(card - 1) : !e.held && ctx.toButton();
+  if (name === 'right') return card < cards.length - 1 && toCard(card + 1);
+  if (e.held) return false;
+  if (name === 'wheel') return e.dy > 0 ? move(0) || 'none' : 'none';
+  if (name === 'a') return openRecap(card);
+  return false;
+}
+
+function toShelf() {
+  if (!cards.length) return ctx.toTabs();
+  onShelf = true;
+  focused = true;
+  if (scrollY) scrollTo(0);
+  return toCard(Math.min(card, cards.length - 1));
+}
+
+function toCard(i) {
+  card = i;
+  const x = Math.max(0, Math.min(i - (CARDS_IN_VIEW - 1), cards.length - CARDS_IN_VIEW)) * CARD_PITCH;
+  if (x !== shelfX) {
+    const { curve, ms } = ctx.scroll;
+    $.strip.animate([{ transform: `translateX(${-shelfX}px)` }, { transform: `translateX(${-x}px)` }], { duration: ms, easing: curve });
+    shelfX = x;
+    $.strip.style.transform = `translateX(${-x}px)`;
+  }
+  placeFocus(RING_IN);
+  return true;
+}
+
+function openRecap(i) {
+  if (!cards[i]) return false;
+  ctx.app.push('recap', { key: cards[i].p.key });
+  return true;
+}
+
+// the cards: "This month so far" always, past months with a session, then years; each over its most played game's art
+function paintShelf() {
+  const games = new Map(entries.map(g => [g.id, g]));
+  cards = periods(recapLog).map(p => {
+    const r = build(p, recapLog, games);
+    const kicker = p.current ? (p.kind === 'year' ? 'This year so far' : 'This month so far') : p.kind === 'year' ? 'Your year' : 'Your month';
+    const sub = r.sessions ? `${span(r.secs, true)}  ·  ${r.sessions} session${r.sessions === 1 ? '' : 's'}` : 'Nothing played yet';
+    const g = games.get(r.topGames[0]?.id);
+    return { p, kicker, title: p.kind === 'month' && !p.current ? p.title : p.name, sub, art: g?.art?.background ?? g?.art?.tile ?? null };
+  });
+  card = Math.min(card, Math.max(0, cards.length - 1));
+  // fewer cards (another user), or a tab switch back to the first: the strip shows the focused card
+  shelfX = Math.max(0, Math.min(card - (CARDS_IN_VIEW - 1), cards.length - CARDS_IN_VIEW)) * CARD_PITCH;
+  $.strip.style.transform = `translateX(${-shelfX}px)`;
+  $.strip.innerHTML = cards.map((c, i) => `
+    <div class="jcard${focused && onShelf && i === card ? ' focus' : ''}" data-nav="jrecap:${i}" style="transform: translateX(${i * CARD_PITCH}px)">
+      <div class="cshade"></div><div class="ck"></div><div class="ct"></div><div class="cs"></div></div>`).join('');
+  [...$.strip.children].forEach((el, i) => {
+    el.querySelector('.ck').textContent = cards[i].kicker;
+    el.querySelector('.ct').textContent = cards[i].title;
+    el.querySelector('.cs').textContent = cards[i].sub;
+    if (!cards[i].art) return;
+    const img = new Image();
+    img.alt = '';
+    img.decoding = 'async';
+    img.src = host.fileUrl(cards[i].art);
+    img.onerror = () => img.remove();
+    img.decode().then(() => img.classList.add('in'), () => {});
+    el.prepend(img);
+  });
+}
+
+export function pointerRecap(name, i) {
+  if (!cards[i]) return 'none';
+  if (name === 'click') return openRecap(i);
+  if (!onShelf || i !== card || !focused) { onShelf = true; focused = true; toCard(i); }
+  return 'none';
+}
+
 // the mouse: library.js passes `jrow:<i>` targets on
 export function pointer(name, i) {
   if (!entries[i]) return 'none';
   if (name === 'click') return open(i);
-  if (i !== index || !focused) { focused = true; move(i); }
+  if (i !== index || !focused || onShelf) { focused = true; move(i); }
   return 'none';
 }
 
@@ -178,7 +275,8 @@ function paint() {
   $.jsortlabel.textContent = `Sort by: ${SORTS.find(s => s.id === sortId).label}`;
   $.jstats.innerHTML = totals().map(([v, l]) => `<div class="st"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('');
   index = Math.min(index, Math.max(0, entries.length - 1));
-  if (!entries.length) focused = false;
+  paintShelf();
+  if (!entries.length && !cards.length) focused = false;
   for (const el of rows.values()) el.remove();
   rows.clear();
   renderRows(scrollY, scrollY);
@@ -240,6 +338,7 @@ function move(i) {
   if (i < 0 || i >= entries.length) return false;
   index = i;
   focused = true;
+  onShelf = false;
   if (scrollY !== scrollFor(i)) scrollTo(scrollFor(i));
   placeFocus(RING_IN);
   return true;
@@ -247,11 +346,14 @@ function move(i) {
 
 function placeFocus(ring) {
   ringAnim?.cancel();
-  for (const [i, el] of rows) el.classList.toggle('focus', focused && i === index);
-  const on = focused && !!entries[index];
+  const shelf = focused && onShelf && !!cards[card];
+  for (const [i, el] of rows) el.classList.toggle('focus', focused && !onShelf && i === index);
+  [...$.strip.children].forEach((el, i) => el.classList.toggle('focus', shelf && i === card));
+  const on = shelf || (focused && !onShelf && !!entries[index]);
   $.jring.hidden = !on;
   if (!on) return;
-  $.jring.style.transform = `translate(${X0 - 6}px, ${rowY(index) - 6}px)`;
+  $.jring.classList.toggle('card', shelf);
+  $.jring.style.transform = shelf ? `translate(${X0 - 6 + card * CARD_PITCH - shelfX}px, ${SHELF_Y - 6}px)` : `translate(${X0 - 6}px, ${rowY(index) - 6}px)`;
   if (ring) ringAnim = $.jring.animate([{ opacity: 0 }, { opacity: 1 }], { duration: ring.ms, delay: ring.delay, easing: 'linear', fill: 'backwards' });
 }
 
