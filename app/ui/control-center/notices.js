@@ -243,8 +243,9 @@ host.games.session?.().then(s => { if (s && !session.id) Object.assign(session, 
 // Row B4: on the first Home of a new month, "Your October recap is ready." (on 1 January the year's too), once for each
 // user: the month told is kept in the page's storage (`recap.noticed.<user>`). A month with no sessions gets none.
 // Checked after the start screen, on a user switch, when the app comes back over a game, and at the turn of the month.
-let recapCheck = Promise.resolve();
+let recapCheck = Promise.resolve(), homeSeen = false;
 function recapNotice() {
+  if (!homeSeen) return recapCheck;
   recapCheck = recapCheck.then(async () => {
     const [users, log] = await Promise.all([host.users.list(), host.library.recap()]);
     const user = users?.current;
@@ -267,7 +268,25 @@ function nextMonth() {
   const ms = new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime() - Date.now() + 1000;
   setTimeout(() => { recapNotice(); nextMonth(); }, Math.min(ms, 2 ** 31 - 1));
 }
-afterStart(() => { recapNotice(); nextMonth(); });
+// "the first Home": Home on screen after the start screen came and went. At boot Home is put on before the start screen
+// goes over it (start.js), so "start screen not on" alone is true for a moment and the toast would play under it. No
+// start screen this time (a restart mid-sitting, or a ?scene= boot): Home is enough.
+function onHome(fn) {
+  const start = () => document.getElementById('screen-start');
+  host.startup.info().then(i => !!i?.restarted, () => false).then(restarted => {
+    let seen = restarted || !start();
+    const check = () => {
+      if (start()?.classList.contains('on')) seen = true;
+      if (!seen || start()?.classList.contains('on') || !document.getElementById('screen-home')?.classList.contains('on')) return false;
+      watch.disconnect();
+      fn();
+      return true;
+    };
+    const watch = new MutationObserver(check);
+    if (!check()) watch.observe(document.getElementById('stage'), { attributes: true, attributeFilter: ['class'], subtree: true, childList: true });
+  });
+}
+onHome(() => { homeSeen = true; recapNotice(); nextMonth(); });
 host.on('users', () => recapNotice());
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') recapNotice(); });
 export const checkRecapNotice = recapNotice; // tests

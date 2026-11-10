@@ -1,0 +1,12 @@
+[
+  {"wait": 5000},
+  {"assert": "__start.state().phase === 'prompt'", "why": "a normal start: the start screen is up over Home"},
+  {"assert": "import('./control-center/toast.js').then(m => !m.toastLog.some(t => t.title === 'Recap')) && !Object.keys(localStorage).some(k => k.startsWith('recap.noticed.'))", "why": "the recap notice waits: nothing is told under the start screen"},
+  {"emit": "input", "payload": {"a": true}},
+  {"wait": 150},
+  {"emit": "input", "payload": {}},
+  {"wait": 4000},
+  {"assert": "__app.top.id === 'home'", "why": "the start screen has gone"},
+  {"assert": "import('./control-center/toast.js').then(m => JSON.stringify(m.toastLog.filter(t => t.title === 'Recap').map(t => t.message)) === JSON.stringify(['Your October recap is ready.']))", "why": "the first Home of November tells October's recap is ready"},
+  {"shot": "recap-notice-after-start"}
+]
