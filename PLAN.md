@@ -268,7 +268,7 @@ Decisions (2026-11-08, Madhav: "log everything you can so that we can make detai
   notice in `app/ui/control-center/notices.js`, reading the log in `app/src-tauri/src/library/sessions.rs`,
   `tools/app/checks/recap.json`.
 - **Done (2026-11-10), measured:**
-  - UI probe `recap.json` (`--query "scene=home&users=3&today=2026-11-10T20:00"`, 48 checks) passes. Its mock log
+  - UI probe `recap.json` (`--query "scene=home&users=3&today=2026-11-10T20:00"`, 50 checks) passes. Its mock log
     (in `host.js`, only with `?today=`): Madhav from 3 October (October lines from before B1b, November lines with
     `front`, achievements, media and a screenshot), Asha in November only, Kabir nothing. It checks: the notice
     "Your October recap is ready." once (not again on Home, a user switch or back to Madhav; none for Asha); the
@@ -277,7 +277,8 @@ Decisions (2026-11-08, Madhav: "log everything you can so that we can make detai
     midnight) and nights (9 h 30 min), Elden Ring first played, Celeste finished, trophies Invested and First Steps,
     "Counted from 3 October"; November 8 h 30 min, 93% with the game in front, 5 achievements, 2 h 45 min of media,
     Ghost of Tsushima new, God of War 100% complete (On hold isn't finished), a screenshot; the year's months; an empty
-    month as one page; on 2 January the December and 2026 notices.
+    month as one page, reached through the shelf by a user with no games in his journal yet; a 0 s session; on 2
+    January the December and 2026 notices.
   - UI probe `recap-notice.json` (`--query "today=2026-11-10T20:00"`, 4 checks): nothing is told under the start
     screen; the notice comes on the first Home after it. It fails on the first version (see below).
   - Unit tests: `a_replay_puts_each_trophy_on_the_session_that_crossed_it` (time from before the log, media, a game
@@ -313,7 +314,8 @@ Decisions (2026-11-08, Madhav: "log everything you can so that we can make detai
       journal page's look, near-black with white and its greys, the game's art the only colour; motion only the
       journal page's 12-frame opening and its 340 ms art cross-fade; no new icons (the header and the notice use the
       top game's tile, trophies Padwake's cup). The full PS5 pass is B5's.
-    - The shelf sits between the totals and the list (rows moved down one pitch to y 678). Down from the tabs comes
+    - The shelf sits between the totals and the list (rows moved down one pitch to y 678). It shows with an empty
+      journal too (focus goes to it), so a new user still has this month. Down from the tabs comes
       back to the shelf if you left from it; a tab switch starts on the first game. A card is a Lists tile with the
       period's top game's art.
     - The notice remembers the month told per user in the page's storage (`recap.noticed.<user>`, in

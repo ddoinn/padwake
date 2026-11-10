@@ -203,7 +203,7 @@ const PAGES = [
       ${box(l.id, l.name, 'hero')}</div>`;
   }],
   ['rhythm', r => {
-    if (!r.sessions) return null;
+    if (!r.secs) return null;
     const max = Math.max(...r.weekdays, 1), part = r.busiestPart;
     const cols = r.weekdays.map((s, k) => `<div class="col${k === r.busiestDay ? ' top' : ''}"><div class="h">${s ? span(s) : ''}</div>
       <div class="well"><i style="height:${((s / max) * 100).toFixed(1)}%"></i></div><div class="d">${WEEKDAYS[k].slice(0, 3)}</div></div>`).join('');
@@ -283,7 +283,7 @@ const PAGES = [
         <div class="cells">
           ${cell(span(r.secs, true), 'Played')}${cell(r.sessions.toLocaleString(), r.sessions === 1 ? 'Session' : 'Sessions')}
           ${cell(r.games.toLocaleString(), r.games === 1 ? 'Game' : 'Games')}${cell(r.longest ? span(r.longest.secs) : '—', 'Longest session')}
-          ${cell(WEEKDAYS[r.busiestDay], 'Busiest day')}${cell(r.busiestPart.label, 'Favourite time')}
+          ${cell(WEEKDAYS[r.busiestDay] ?? '—', 'Busiest day')}${cell(r.busiestPart?.label ?? '—', 'Favourite time')}
           ${cell(r.trophies.length.toLocaleString(), r.trophies.length === 1 ? 'Trophy' : 'Trophies')}${cell(r.finished.length.toLocaleString(), 'Finished')}
         </div>
       </div>

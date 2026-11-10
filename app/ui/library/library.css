@@ -150,7 +150,6 @@
 /* the Recaps shelf (row B4): 296 x 132 cards at y 522, pitch 320, five in view; a card is a Lists tile (the charcoal
    gradient) with its period's most played game's art under a shade, the name and hours over it */
 #screen-library .jshelf { position: absolute; left: 172px; top: 522px; width: 1576px; height: 132px; overflow: hidden; }
-#screen-library .journal.none .jshelf { display: none; }
 #screen-library .jstrip { position: absolute; left: 0; top: 0; height: 132px; will-change: transform; }
 #screen-library .jcard { position: absolute; left: 0; top: 0; width: 296px; height: 132px; border-radius: 2px; overflow: hidden;
   background: linear-gradient(to bottom right, #0a0b10, #15191d); }

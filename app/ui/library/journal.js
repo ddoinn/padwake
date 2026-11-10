@@ -112,7 +112,8 @@ export function show(on) {
 }
 
 export function focus(ring = RING_IN) {
-  if (!entries.length) return false;
+  if (!entries.length && !cards.length) return false;
+  if (!entries.length) onShelf = true; // no games yet: the shelf still has this month
   focused = true;
   placeFocus(ring);
   return true;
@@ -130,8 +131,8 @@ export function fadeOut(o) {
 
 export function action(name, e) {
   const n = entries.length;
-  if (!n) return name === 'left' ? ctx.toButton() : name === 'up' ? ctx.toTabs() : false;
   if (onShelf) return shelfAction(name, e);
+  if (!n) return name === 'left' ? ctx.toButton() : name === 'up' ? ctx.toTabs() : false;
   if (name === 'up') return index > 0 ? move(index - 1) : (!e.held && toShelf());
   if (name === 'down') return index < n - 1 && move(index + 1);
   if (name === 'left') return !e.held && ctx.toButton();
@@ -149,7 +150,7 @@ export function action(name, e) {
 // ---------- the Recaps shelf (row B4) ----------
 function shelfAction(name, e) {
   if (name === 'up') return !e.held && ctx.toTabs();
-  if (name === 'down') { onShelf = false; return move(0); }
+  if (name === 'down') return move(0);
   if (name === 'left') return card > 0 ? toCard(card - 1) : !e.held && ctx.toButton();
   if (name === 'right') return card < cards.length - 1 && toCard(card + 1);
   if (e.held) return false;
@@ -196,6 +197,9 @@ function paintShelf() {
     return { p, kicker, title: p.kind === 'month' && !p.current ? p.title : p.name, sub, art: g?.art?.background ?? g?.art?.tile ?? null };
   });
   card = Math.min(card, Math.max(0, cards.length - 1));
+  // fewer cards (another user), or a tab switch back to the first: the strip shows the focused card
+  shelfX = Math.max(0, Math.min(card - (CARDS_IN_VIEW - 1), cards.length - CARDS_IN_VIEW)) * CARD_PITCH;
+  $.strip.style.transform = `translateX(${-shelfX}px)`;
   $.strip.innerHTML = cards.map((c, i) => `
     <div class="jcard${focused && onShelf && i === card ? ' focus' : ''}" data-nav="jrecap:${i}" style="transform: translateX(${i * CARD_PITCH}px)">
       <div class="cshade"></div><div class="ck"></div><div class="ct"></div><div class="cs"></div></div>`).join('');
@@ -271,8 +275,8 @@ function paint() {
   $.jsortlabel.textContent = `Sort by: ${SORTS.find(s => s.id === sortId).label}`;
   $.jstats.innerHTML = totals().map(([v, l]) => `<div class="st"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('');
   index = Math.min(index, Math.max(0, entries.length - 1));
-  if (!entries.length) focused = false;
   paintShelf();
+  if (!entries.length && !cards.length) focused = false;
   for (const el of rows.values()) el.remove();
   rows.clear();
   renderRows(scrollY, scrollY);
