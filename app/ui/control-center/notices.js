@@ -10,7 +10,7 @@ import { host } from '../host.js';
 import { toast } from './toast.js';
 import { playSound } from '../input/input.js';
 import { newlyEarned, tierName, TIER_COLOR } from '../journal/trophies.js';
-import { due } from '../journal/recaps.js';
+import { due, build } from '../journal/recaps.js';
 
 const DAY = 864e5;
 export const notices = [];                 // newest first: {id, name, tile, at}
@@ -254,7 +254,11 @@ function recapNotice() {
     try { told = localStorage.getItem(key); } catch {}
     if (told === d.key) return;
     try { localStorage.setItem(key, d.key); } catch {}
-    for (const p of [d.month, d.year].filter(Boolean)) toast({ title: 'Recap', message: `Your ${p.name} recap is ready.`, icon: 'glyph:recap' });
+    // its icon: the period's most played game's tile, as the session recap's
+    for (const p of [d.month, d.year].filter(Boolean)) {
+      const tile = gameById(build(p, log).topGames[0]?.id)?.art?.tile;
+      toast({ title: 'Recap', message: `Your ${p.name} recap is ready.`, icon: tile ? host.fileUrl(tile) : null });
+    }
   }).catch(e => console.warn('recap notice', e));
   return recapCheck;
 }

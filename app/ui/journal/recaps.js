@@ -24,10 +24,6 @@ export const PARTS = [
   { id: 'evening', label: 'Evening', from: 17, to: 22, who: 'an evening player' },
   { id: 'night', label: 'Night', from: 22, to: 29, who: 'a night owl' },
 ];
-// each recap has its colour: a hue per month (a year takes its own)
-export const hueOf = p => (p.kind === 'year' ? 265 : [210, 330, 150, 95, 45, 15, 355, 285, 25, 190, 300, 230][p.month]);
-// the recap mark: a calendar with a star
-export const MARK = '<svg viewBox="0 0 32 32"><g fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="7" width="22" height="20" rx="3"/><path d="M5 13h22M11 4.5v5M21 4.5v5"/></g><path fill="#fff" d="M16 16.2l1.3 2.7 2.9.4-2.1 2 .5 2.9-2.6-1.4-2.6 1.4.5-2.9-2.1-2 2.9-.4Z"/></svg>';
 
 const partOf = h => PARTS.find(p => (h < 5 ? h + 24 : h) >= p.from && (h < 5 ? h + 24 : h) < p.to).id;
 

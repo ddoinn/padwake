@@ -13,7 +13,7 @@
 
 import { statusOf, done, hours, ago, date, stars, tint, squareArt, STAR, percentOf } from '../journal/shared.js';
 import { earned as trophies } from '../journal/trophies.js';
-import { periods, build, span, hueOf, MARK } from '../journal/recaps.js';
+import { periods, build, span } from '../journal/recaps.js';
 
 export const SORTS = [
   { id: 'played', label: 'Recently played' },
@@ -185,23 +185,32 @@ function openRecap(i) {
   return true;
 }
 
-// the cards: "This month so far" always, past months with a session, then years; each in its recap's colour
+// the cards: "This month so far" always, past months with a session, then years; each over its most played game's art
 function paintShelf() {
   const games = new Map(entries.map(g => [g.id, g]));
   cards = periods(recapLog).map(p => {
     const r = build(p, recapLog, games);
     const kicker = p.current ? (p.kind === 'year' ? 'This year so far' : 'This month so far') : p.kind === 'year' ? 'Your year' : 'Your month';
     const sub = r.sessions ? `${span(r.secs, true)}  ·  ${r.sessions} session${r.sessions === 1 ? '' : 's'}` : 'Nothing played yet';
-    return { p, kicker, title: p.kind === 'month' && !p.current ? p.title : p.name, sub };
+    const g = games.get(r.topGames[0]?.id);
+    return { p, kicker, title: p.kind === 'month' && !p.current ? p.title : p.name, sub, art: g?.art?.background ?? g?.art?.tile ?? null };
   });
   card = Math.min(card, Math.max(0, cards.length - 1));
   $.strip.innerHTML = cards.map((c, i) => `
-    <div class="jcard${focused && onShelf && i === card ? ' focus' : ''}" data-nav="jrecap:${i}" style="--hue:${hueOf(c.p)}; transform: translateX(${i * CARD_PITCH}px)">
-      <div class="mk">${MARK}</div><div class="ck"></div><div class="ct"></div><div class="cs"></div></div>`).join('');
+    <div class="jcard${focused && onShelf && i === card ? ' focus' : ''}" data-nav="jrecap:${i}" style="transform: translateX(${i * CARD_PITCH}px)">
+      <div class="cshade"></div><div class="ck"></div><div class="ct"></div><div class="cs"></div></div>`).join('');
   [...$.strip.children].forEach((el, i) => {
     el.querySelector('.ck').textContent = cards[i].kicker;
     el.querySelector('.ct').textContent = cards[i].title;
     el.querySelector('.cs').textContent = cards[i].sub;
+    if (!cards[i].art) return;
+    const img = new Image();
+    img.alt = '';
+    img.decoding = 'async';
+    img.src = host.fileUrl(cards[i].art);
+    img.onerror = () => img.remove();
+    img.decode().then(() => img.classList.add('in'), () => {});
+    el.prepend(img);
   });
 }
 
