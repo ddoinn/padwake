@@ -686,9 +686,9 @@ function pointer(name, e) {
     if (zone !== 'lists') { zone = 'lists'; paintZone(); }
     return lists.pointer(name, i);
   }
-  if (kind === 'jrow') {
+  if (kind === 'jrow' || kind === 'jrecap') {
     if (zone !== 'journal') { zone = 'journal'; paintZone(); }
-    return journal.pointer(name, i);
+    return kind === 'jrecap' ? journal.pointerRecap(name, i) : journal.pointer(name, i);
   }
   if (kind === 'cover') {
     if (name === 'click') return open(i);

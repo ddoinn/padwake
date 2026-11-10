@@ -2,13 +2,15 @@
 // - notifications: games added, from `library` events (plus the last three days' additions at start, without toasts)
 // - the running session, from `game` events, and whether the app just woke over it after Guide (`over`)
 // - the toasts: "<game> / Was added to your library." and "Ready to play." when the app shows over a game that came up;
-//   "System Software" when an update is ready, and after the app was updated; the session recap as a game ends
+//   "System Software" when an update is ready, and after the app was updated; the session recap as a game ends; and
+//   on the first Home of a new month, "Your October recap is ready." (row B4)
 // Control Center reads `notices`, `session` and `takeOver()`.
 
 import { host } from '../host.js';
 import { toast } from './toast.js';
 import { playSound } from '../input/input.js';
 import { newlyEarned, tierName, TIER_COLOR } from '../journal/trophies.js';
+import { due } from '../journal/recaps.js';
 
 const DAY = 864e5;
 export const notices = [];                 // newest first: {id, name, tile, at}
@@ -237,3 +239,31 @@ host.on('game', ({ kind, state }) => { if (kind === 'media' && state === 'launch
 mediaList();
 host.library.list().then(list => { if (!known) { library.games = list ?? []; seen(library.games); } }).catch(() => {});
 host.games.session?.().then(s => { if (s && !session.id) Object.assign(session, { id: s.id, kind: s.kind }); }).catch(() => {});
+
+// Row B4: on the first Home of a new month, "Your October recap is ready." (on 1 January the year's too), once for each
+// user: the month told is kept in the page's storage (). A month with no sessions gets none.
+// Checked after the start screen, on a user switch, when the app comes back over a game, and at the turn of the month.
+let recapCheck = Promise.resolve();
+function recapNotice() {
+  recapCheck = recapCheck.then(async () => {
+    const [users, log] = await Promise.all([host.users.list(), host.library.recap()]);
+    const user = users?.current;
+    if (!user) return;
+    const key = , d = due(log);
+    let told = null;
+    try { told = localStorage.getItem(key); } catch {}
+    if (told === d.key) return;
+    try { localStorage.setItem(key, d.key); } catch {}
+    for (const p of [d.month, d.year].filter(Boolean)) toast({ title: 'Recap', message: , icon: 'glyph:recap' });
+  }).catch(e => console.warn('recap notice', e));
+  return recapCheck;
+}
+function nextMonth() {
+  const d = new Date(Date.now());
+  const ms = new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime() - Date.now() + 1000;
+  setTimeout(() => { recapNotice(); nextMonth(); }, Math.min(ms, 2 ** 31 - 1));
+}
+afterStart(() => { recapNotice(); nextMonth(); });
+host.on('users', () => recapNotice());
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') recapNotice(); });
+export const checkRecapNotice = recapNotice; // tests
