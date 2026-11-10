@@ -267,6 +267,60 @@ Decisions (2026-11-08, Madhav: "log everything you can so that we can make detai
 - **Owns:** a new `app/ui/journal/recap.js` and its CSS, the Recaps entry in `app/ui/library/journal.js`, the
   notice in `app/ui/control-center/notices.js`, reading the log in `app/src-tauri/src/library/sessions.rs`,
   `tools/app/checks/recap.json`.
+- **Done (2026-11-10), measured:**
+  - UI probe `recap.json` (`--query "scene=home&users=3&today=2026-11-10T20:00"`, 48 checks) passes. Its mock log
+    (in `host.js`, only with `?today=`): Madhav from 3 October (October lines from before B1b, November lines with
+    `front`, achievements, media and a screenshot), Asha in November only, Kabir nothing. It checks: the notice
+    "Your October recap is ready." once (not again on Home, a user switch or back to Madhav; none for Asha); the
+    shelf `2026-11, 2026-10, 2026` with nothing before the log; October 15 h 15 min, 8 sessions on 8 days, top 3 Hades
+    11 h 30 min / Elden Ring / Celeste, longest 4 h on Sunday 18 October from 21:30, Sundays (8 h, the 18th split at
+    midnight) and nights (9 h 30 min), Elden Ring first played, Celeste finished, trophies Invested and First Steps,
+    "Counted from 3 October"; November 8 h 30 min, 93% with the game in front, 5 achievements, 2 h 45 min of media,
+    Ghost of Tsushima new, God of War 100% complete (On hold isn't finished), a screenshot; the year's months; an empty
+    month as one page; on 2 January the December and 2026 notices.
+  - UI probe `recap-notice.json` (`--query "today=2026-11-10T20:00"`, 4 checks): nothing is told under the start
+    screen; the notice comes on the first Home after it. It fails on the first version (see below).
+  - Unit tests: `a_replay_puts_each_trophy_on_the_session_that_crossed_it` (time from before the log, media, a game
+    no longer in the library, log order, totals smaller than the log), `a_replay_of_ten_sessions_finds_regular_once`,
+    `a_recap_replays_the_log_and_keeps_status_changes`. `cargo test --lib --locked`: 135 passed, 14 ignored. Every
+    probe line in `DEVELOPMENT.md` passes (`gallery.json` with `scene=home`, as on `main`).
+  - On the Avita, a release build with its own data dir, `W:\games-test`, the test pad and one user, run in the desktop
+    session through one-shot scheduled tasks. After the first scan, a seeded log (8 October lines without B1b fields,
+    7 November lines with them, 4 status events, `play.json` totals with time from before the log, one capture dated
+    8 November): Home showed "Recap / Your October recap is ready." with Hades' tile; the Journal's shelf read
+    November so far 8 h 30 min · 5 sessions, October 2026 15 h · 8 sessions, 2026 so far 24 h · 13 sessions; every page
+    of all three recaps was walked with the pad (8, 10 and 11 pages; Right on the last page stays put; B back to its
+    card). The host's replay gave October Invested (Hades) and First Steps (Elden Ring), not Celeste's (earned before
+    the log), and November Regular and Invested (Hollow Knight, from 9 h and 9 sessions before), Regular (God of War)
+    and First Steps (Ghost of Tsushima). Windows kept the taskbar up in that run (Padwake wasn't given the foreground);
+    nothing in this row touches the window.
+  - The live run found one bug the mock couldn't: at boot Home is put on before the start screen goes over it, so the
+    first check ran under the start screen, marked October told, and the toast played unseen. It now waits for Home
+    after the start screen came and went (or a start with none: a restart, a `?scene=` boot).
+  - Decisions:
+    - The host sends the log, not totals (`library|recap`: sessions with replayed trophies, and status events). The
+      page works the recap out in local time (`ui/journal/recaps.js`), which Rust has no zone data for. Logged B1b
+      `trophies` are replaced by the replay, so two PCs' merged logs never count one twice.
+    - A session counts in the month it started. Weekday and time of day split it by the hour it ran. Morning 5–12,
+      afternoon 12–17, evening 17–22, night 22–5.
+    - "In front" is a share of the sessions that know it, never guessed for older lines. Media time is its own page
+      and adds no playtime. Finished: set to Finished or 100% complete in the period, and not changed after in it.
+      New: first played (library or log, whichever is earlier) inside the period and the log's time.
+    - The moment is the newest screenshot of the top game, else the newest; only in a period with sessions.
+    - Pages: cover, time, top 3, longest, rhythm, month by month (years), firsts and finishes, trophies, moment, media,
+      summary; a page with nothing is left out. A, Right or RB on; Left or LB back; A on the last page or B closes.
+    - Look (Madhav, 2026-11-10: the first version's per-month colours, glows, count-ups and new icons clashed): the
+      journal page's look, near-black with white and its greys, the game's art the only colour; motion only the
+      journal page's 12-frame opening and its 340 ms art cross-fade; no new icons (the header and the notice use the
+      top game's tile, trophies Padwake's cup). The full PS5 pass is B5's.
+    - The shelf sits between the totals and the list (rows moved down one pitch to y 678). Down from the tabs comes
+      back to the shelf if you left from it; a tab switch starts on the first game. A card is a Lists tile with the
+      period's top game's art.
+    - The notice remembers the month told per user in the page's storage (`recap.noticed.<user>`, in
+      `data\webview`). It checks on the first Home, a user switch, the app coming back over a game, and at the turn of
+      the month (one timer).
+    - Also touched: `app.js` (a screen whose files are in another folder), `host.js` (`library.recap`, the mock log,
+      `?today=`), `library/library.js` and `library.css` (the shelf), `library/mod.rs` (the command).
 
 ### Row B5: PS5-feel polish pass
 - **Outcome:**
