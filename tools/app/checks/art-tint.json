@@ -1,0 +1,20 @@
+[
+  {"wait": 1000},
+  {"eval": "(() => { const tile = c => { const k = Object.assign(document.createElement('canvas'), {width: 64, height: 64}), x = k.getContext('2d'); x.fillStyle = c; x.fillRect(0, 0, 64, 64); return k.toDataURL('image/png'); }; const g = id => __mock.library.find(x => x.id === id); g('elden-ring').art = {tile: tile('#b04a28'), background: null, logo: null, cover: null}; __mock.emit('library', __mock.library); return 'seeded'; })()"},
+  {"eval": "window.__front = () => [...document.querySelectorAll('#screen-home .bg .layer')].find(l => l.style.zIndex === '1'); window.__rgb = s => [...s.matchAll(/rgba?\\((\\d+), (\\d+), (\\d+)/g)].map(m => m.slice(1).map(Number)); window.__grey = s => __rgb(s).every(([r, g, b]) => r === g && g === b); 'helpers'"},
+  {"wait": 400},
+  {"eval": "__app.go('home', {focus: 'elden-ring'})"}, {"wait": 1200},
+  {"assert": "__front().dataset.item === 'elden-ring' && (([r, g, b]) => r > b + 20)(__rgb(__front().style.background)[0])", "why": "a game with a tile but no background art: Home's background is a dark wash in the tile's colour"},
+  {"assert": "Math.max(...__rgb(__front().style.background)[0]) <= 64", "why": "the wash stays dark, so the hero text reads"},
+  {"shot": "art-tint-home"},
+  {"eval": "__app.go('home', {focus: 'cyberpunk-2077'})"}, {"wait": 1200},
+  {"assert": "__front().dataset.item === 'cyberpunk-2077' && __rgb(__front().style.background).length > 0 && __grey(__front().style.background)", "why": "a game with no art at all: grey, never a made-up hue"},
+  {"assert": "[...document.querySelectorAll('#screen-home .tile')].every(t => __grey(t.style.background))", "why": "placeholder tiles are grey"},
+  {"shot": "art-tint-none"},
+  {"eval": "__app.push('journal', {id: 'elden-ring'})"}, {"wait": 1200},
+  {"assert": "(([r, g, b]) => r > b + 20)(__rgb(document.querySelector('#screen-journal .jpbg').style.background)[0])", "why": "its journal page has the same wash"},
+  {"eval": "__app.pop()"}, {"wait": 600},
+  {"eval": "__app.push('journal', {id: 'hades'})"}, {"wait": 1200},
+  {"assert": "[...document.querySelectorAll('#screen-journal b')].filter(b => b.style.background).every(b => ['rgb(255, 255, 255)', 'rgba(255, 255, 255, 0.3)'].includes(b.style.background))", "why": "status dots are white or faint, no colour of their own"},
+  {"shot": "art-tint-journal"}
+]

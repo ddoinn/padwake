@@ -16,8 +16,9 @@ const BOX = { x: 1236, y: 30 };
 
 const GLYPHS = {
   trophy: CUP,
-  mouse: '<svg viewBox="0 0 32 32"><path d="M9 4.5v20.5l5.6-5.4 3.6 8.2 3.5-1.5-3.6-8.1 7.7-.2Z" fill="#fff" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/></svg>',
-  library: '<svg viewBox="0 0 32 32"><g fill="#fff"><rect x="5" y="5" width="9" height="9" rx="2"/><rect x="18" y="5" width="9" height="9" rx="2"/><rect x="5" y="18" width="9" height="9" rx="2"/><path d="M22.5 17.5v10M17.5 22.5h10" stroke="#fff" stroke-width="3" stroke-linecap="round"/></g></svg>',
+  // line icons, as Control Center's (its mouse) and Settings' (its library): 2.6 px strokes, round ends
+  mouse: '<svg viewBox="0 0 32 32"><g fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><rect x="8.5" y="3.5" width="15" height="25" rx="7.5"/><path d="M16 4v8"/></g></svg>',
+  library: '<svg viewBox="0 0 32 32"><g fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="4.5" width="9.5" height="9.5" rx="2"/><rect x="18" y="4.5" width="9.5" height="9.5" rx="2"/><rect x="4.5" y="18" width="9.5" height="9.5" rx="2"/><path d="M22.75 18v9.5M18 22.75h9.5"/></g></svg>',
   update: '<svg viewBox="0 0 32 32"><g fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4.5v15M10 13.5l6 6 6-6"/><path d="M6 21v4.5h20V21"/></g></svg>',
   cloud: '<svg viewBox="0 0 32 32"><g fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.3 25h14a6.2 6.2 0 0 0 1-12.3A8.4 8.4 0 0 0 8 11.9 6.5 6.5 0 0 0 9.3 25z"/><path d="M16 21.5V14M12.7 17.2 16 14l3.3 3.2"/></g></svg>',
   power: '<svg viewBox="0 0 32 32"><path d="M10.2 8.6a10.4 10.4 0 1 0 11.6 0" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/><path d="M16 4.5v11" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>',

@@ -335,3 +335,62 @@ Decisions (2026-11-08, Madhav: "log everything you can so that we can make detai
   still passes, and the keypress-to-first-frame median and Home idle CPU/GPU stay within 10 % of
   `docs/performance.md`.
 - **Owns:** whatever `app/ui/**` files the chosen fixes touch. Runs last, alone.
+- **Done (2026-11-10), widened to a full design pass** (Madhav: "Why is there a random blue? The icons just look weird,
+  the blue animations look weird, and purple was there weirdly"):
+  - **Audit.** Every screen at 1080p in the UI probe (mock host, headless Edge): Home, the next game, the hub (Play and
+    cards), Options, Display for This Game, Control Center, Search, Library (Your Collection, Journal, Lists, Add to
+    List), a journal page, the recap shelf and pages, the month notice, toasts (update, session, trophy), gallery and
+    viewer, Settings and its dialogs, the controller test, users and avatars, the start and launch screens. Off-look:
+    - Colour: games without art got a hue hashed from their id (the purple, blue and green tiles on Home, in the
+      Library, Search, Lists, hub cards, journal pages and recaps). The launch screen was navy with a drifting blue glow.
+      The spotlight behind Settings, Search, Library and Users was navy on the right and mauve on the left. Settings and
+      gallery pills were navy (`#181826`), panels, toasts and cards had a blue cast (`#1c1d22`→`#090d13`, `#14161b`),
+      Settings values were lavender (`#c7c7d5`). Journal status dots were blue, green, yellow and red. Preset avatars
+      were saturated orange, blue, indigo and purple gradients. 100 % bars were gold; a users error line was salmon.
+    - Icons: the smart-list sparkle (a filled AI-style star) and the toast's filled mouse cursor and library glyph, in
+      a set that is otherwise 2.6 px round line icons.
+    - Motion: the launch screen's blue glow drifting forever and its logo rising in on a springy curve, a light running
+      round the users focus ring, the trophy toast's cup overshooting (`cubic-bezier(.34, 1.56, …)`) and a gold flare.
+      Everything else already used Home's spring, `--ease-out` fades and transform/opacity.
+  - **Fixes** (before → after, mock host, 1920 × 1080):
+    1. Placeholders: charcoal, a shade lighter or darker per game (`hsl(0 0% 24–28 %)` → 12 %), in one `tint`
+       (`journal/shared.js`; Library and Search dropped their copies). Home: purple Cyberpunk tile and wash → grey.
+       Library and Search grids: purple/green covers → charcoal covers with the game's name.
+    2. Launch screen: navy radial and blue glow → Home's wash (the tile's colour, else grey), logo fades in like Home's
+       hero, no movement.
+    3. One neutral palette: every tinted grey (channel spread 6–24, not near-black) became the grey of its mean; the
+       spotlight's tone map and lights keep their brightness in grey. Settings sleep dialog: navy "Sleep" pill and blue
+       right side → grey pill on a grey spotlight.
+    4. Avatars: the six initial presets are greys (Graphite, Silver, Charcoal, Stone, Ash, Ink; ids unchanged, so saved
+       users keep theirs), the six glyph presets white on charcoal. Users: orange M, blue moon, indigo bolt → grey.
+    5. Journal status dots white when set, faint when not; 100 % bars white; the users error line white.
+    6. Icons: smart lists show a line filter glyph; the toast's mouse and library glyphs are line icons like Control
+       Center's and Settings'.
+    7. Motion: users ring fades in with no running light; trophy cup grows in with `--ease-out`, no overshoot, no gold
+       flare (one shine pass stays, as the PS5's tile shine); `trophies.json` now checks there's no flare.
+  - **Console feel** (one picked): Home's background follows the focused game's art when it has no background art: a
+    dark wash in the tile's average colour (`art-tint.js`, an 8 × 8 canvas read, cached), also on the journal page and
+    the launch screen. Probe `art-tint.json`: a rust-coloured tile gives a rust wash at most 25 % bright, a game with no
+    art gets grey, placeholders are grey, status dots white. Not done: a hold-to-confirm ring on Close Game (the input
+    layer has no button-release event; Close Game already asks a second A), more depth entering the hub (the PS5's hub
+    doesn't scale or blur the art, 1-home.md §1.5; Home already does its measured 156 px rise).
+  - Kept, on purpose: the trophy tiers' cup colours, the start screen's gold bokeh (measured), media apps' own art.
+  - Screenshots: described above, before and after for each fix; the PNGs stay out of git (the repo keeps only the
+    README's media) and are shown in the PR's report.
+  - Checks: every probe line in `DEVELOPMENT.md` passes (18, with `art-tint.json`; the gallery line now says
+    `scene=home`, as it passes on `main`). No Rust changed.
+  - Live, on the Avita (release build, its own data dir, `W:\games-test` with its downloaded art, the test pad, run in
+    the desktop session through one-shot scheduled tasks, person check first): the same walk on the B3 build and this
+    one, Home, the next game, hub, hub cards, Options, Control Center, Search, Settings, Library, Journal, Lists. Real
+    art is unchanged; the art-less games' purple and green tiles in Home's row are charcoal; Search's and Settings' navy
+    right side is grey; Control Center's blue-grey cards are grey.
+  - Speed and idle cost, same conditions for both builds (Home on its first game, 20 jittered presses, 60 s idle):
+
+    | | `docs/performance.md` | B3 build, today | This build |
+    | :--- | :--- | :--- | :--- |
+    | Key → first moving frame, median | 29.75 ms | 31.95 ms | **30.15 ms** (+1.3 %) |
+    | Home idle CPU | 0.0830 % | 0.0830 % | **0.0672 %** |
+    | Home idle GPU, average | 0.006 % | 0.004 % | **0.003 %** |
+
+    A first run with Home left on the Game Library tile (its preview showing) read 37.2 ms (B3) and 38.2 ms (this
+    build), CPU 0.0696 % and 0.0703 %: that tile's move costs more than a game tile's, on both builds.

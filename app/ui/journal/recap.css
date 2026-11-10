@@ -25,17 +25,17 @@
   justify-content: center; }
 #screen-recap .kicker { font-size: 25px; line-height: 36px; color: #bdbdbd; }
 #screen-recap .huge { margin-top: 12px; font-size: 160px; line-height: 170px; font-weight: 300; white-space: nowrap; }
-#screen-recap .huge small { font-size: 72px; color: #a9abb2; }
+#screen-recap .huge small { font-size: 72px; color: #adadad; }
 #screen-recap .giant { margin-top: 8px; font-size: 160px; line-height: 170px; font-weight: 300; white-space: nowrap; }
 #screen-recap .giant small { font-size: 48px; color: #d8d8dc; }
 #screen-recap .lede { margin-top: 12px; font-size: 44px; line-height: 56px; font-weight: 300; }
 #screen-recap .lede.big { font-size: 60px; line-height: 72px; }
 #screen-recap .lede .em { font-weight: 400; }
 #screen-recap .sub { margin-top: 12px; font-size: 28px; line-height: 38px; color: #d8d8dc; white-space: pre; }
-#screen-recap .note { margin-top: 36px; font-size: 24px; line-height: 32px; color: #a9abb2; }
+#screen-recap .note { margin-top: 36px; font-size: 24px; line-height: 32px; color: #adadad; }
 
 /* square art */
-#screen-recap .rtile { position: relative; flex: none; overflow: hidden; border-radius: 6px; background: #14161b; }
+#screen-recap .rtile { position: relative; flex: none; overflow: hidden; border-radius: 6px; background: #171717; }
 #screen-recap .rtile img { display: block; width: 100%; height: 100%; object-fit: cover; }
 #screen-recap .rtile img.portrait { object-position: 50% 0; }
 #screen-recap .rtile .name { position: absolute; left: 14px; bottom: 12px; right: 14px; font-size: 20px; line-height: 26px; font-weight: 600; }
@@ -55,12 +55,12 @@
 #screen-recap .tg.first { width: 420px; }
 #screen-recap .tg .rtile { width: 300px; height: 300px; }
 #screen-recap .tg.first .rtile { width: 420px; height: 420px; }
-#screen-recap .tg .rank { margin-top: 20px; font-size: 22px; line-height: 30px; color: #a9abb2; }
+#screen-recap .tg .rank { margin-top: 20px; font-size: 22px; line-height: 30px; color: #adadad; }
 #screen-recap .gn { font-size: 30px; line-height: 40px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #screen-recap .tg.first .gn { font-size: 36px; line-height: 46px; }
 #screen-recap .gt { margin-top: 2px; font-size: 22px; line-height: 30px; color: #bdbdbd; white-space: pre; }
 #screen-recap .tg .meter { margin-top: 14px; }
-#screen-recap .gs { margin-top: 8px; font-size: 20px; line-height: 26px; color: #a9abb2; }
+#screen-recap .gs { margin-top: 8px; font-size: 20px; line-height: 26px; color: #adadad; }
 
 /* longest: the game's art on the right */
 #screen-recap .p-longest .rtile.hero { position: absolute; right: 0; top: 120px; width: 500px; height: 500px; }
@@ -69,7 +69,7 @@
 #screen-recap .cols { display: flex; gap: 20px; margin-top: 44px; }
 #screen-recap .col { width: 130px; text-align: center; }
 #screen-recap .cols.months .col { width: 100px; }
-#screen-recap .col .h { height: 30px; font-size: 20px; line-height: 30px; color: #a9abb2; white-space: nowrap; }
+#screen-recap .col .h { height: 30px; font-size: 20px; line-height: 30px; color: #adadad; white-space: nowrap; }
 #screen-recap .col .well { position: relative; height: 220px; margin-top: 8px; background: rgba(255, 255, 255, .08); }
 #screen-recap .col .well i { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(255, 255, 255, .45); }
 #screen-recap .col.top .well i { background: #fff; }
@@ -90,7 +90,7 @@
 #screen-recap .gl .rtile.small { position: absolute; left: 0; top: 0; width: 104px; height: 104px; }
 #screen-recap .gl .rtile.small .name { font-size: 14px; line-height: 18px; left: 8px; bottom: 6px; }
 #screen-recap .gl .gn { margin-top: 18px; font-size: 28px; line-height: 38px; }
-#screen-recap .more { margin-top: 14px; font-size: 22px; color: #a9abb2; }
+#screen-recap .more { margin-top: 14px; font-size: 22px; color: #adadad; }
 
 /* trophies: Padwake's cup in its tier's colour, as the journal page draws them */
 #screen-recap .tiers { display: flex; gap: 40px; margin-top: 6px; font-size: 26px; line-height: 40px; }
@@ -106,7 +106,7 @@
 #screen-recap .ach b { font-weight: 400; }
 
 /* a moment: one screenshot */
-#screen-recap .p-moment .shot { margin-top: 28px; width: 1040px; height: 585px; border-radius: 6px; overflow: hidden; background: #14161b; }
+#screen-recap .p-moment .shot { margin-top: 28px; width: 1040px; height: 585px; border-radius: 6px; overflow: hidden; background: #171717; }
 #screen-recap .p-moment .shot img { display: block; width: 100%; height: 100%; object-fit: cover; }
 #screen-recap .p-moment .cap { position: absolute; left: 1104px; bottom: 90px; width: 472px; }
 #screen-recap .p-moment .cap .gn { font-size: 36px; line-height: 46px; white-space: normal; }
@@ -115,7 +115,7 @@
 /* media */
 #screen-recap .apps { display: flex; gap: 64px; margin-top: 50px; }
 #screen-recap .app { width: 300px; }
-#screen-recap .app .ai { width: 132px; height: 132px; margin-bottom: 18px; border-radius: 6px; overflow: hidden; background: #14161b; }
+#screen-recap .app .ai { width: 132px; height: 132px; margin-bottom: 18px; border-radius: 6px; overflow: hidden; background: #171717; }
 #screen-recap .app .ai img { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 /* summary: one panel with all of it */

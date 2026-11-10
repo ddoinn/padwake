@@ -137,7 +137,7 @@ function draw(focusId) {
     const el = document.createElement('div');
     el.className = `ucard${c.user ? '' : ' add'}`;
     el.dataset.nav = `user:${i}`;
-    el.innerHTML = `<div class="udisc">${c.user ? avatarHtml(c.user, BIG, { games, host }) : `<div class="avatar">${PLUS}</div>`}<i class="uring"><b></b></i></div><div class="uname"></div>`;
+    el.innerHTML = `<div class="udisc">${c.user ? avatarHtml(c.user, BIG, { games, host }) : `<div class="avatar">${PLUS}</div>`}<i class="uring"></i></div><div class="uname"></div>`;
     el.querySelector('.uname').textContent = c.user ? c.user.name : 'Add User';
     return el;
   }));

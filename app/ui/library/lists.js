@@ -34,8 +34,8 @@ export const SMART = [
 ];
 
 const ICONS = {
-  // a spark: the list fills itself
-  smart: '<svg viewBox="0 0 24 24"><path fill="#fff" d="M12 1.5l2.3 6.6 6.7 2.4-6.7 2.4L12 19.5l-2.3-6.6L3 10.5l6.7-2.4zM19.5 15l1 2.8 2.7 1-2.7 1-1 2.7-1-2.7-2.7-1 2.7-1z"/></svg>',
+  // a filter: the list fills itself. A line icon, as Settings' and Control Center's (2.6 px at size, round ends).
+  smart: '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16l-6.2 7.6v5.9l-3.6 1.8v-7.7Z"/></svg>',
   plus: '<svg viewBox="0 0 134 134"><path d="M67 30v74M30 67h74" stroke="#fff" stroke-width="7" stroke-linecap="round"/></svg>',
 };
 

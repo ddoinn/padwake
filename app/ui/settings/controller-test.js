@@ -24,7 +24,7 @@ const direction = (id, rotation) => `<g transform="translate(397 402) rotate(${r
 
 const drawing = `<svg class="pad-drawing" viewBox="0 0 1000 680" role="img" aria-label="Controller with live button and stick positions">
   <defs><linearGradient id="pad-shell" x2="0" y2="1">
-    <stop stop-color="#41434d"/><stop offset=".5" stop-color="#292b34"/><stop offset="1" stop-color="#1c1e26"/>
+    <stop stop-color="#464646"/><stop offset=".5" stop-color="#2d2d2d"/><stop offset="1" stop-color="#202020"/>
   </linearGradient></defs>
   ${shoulder('lt', 219, 36, 'LT')}${shoulder('rt', 627, 36, 'RT')}
   ${shoulder('lb', 219, 97, 'LB')}${shoulder('rb', 627, 97, 'RB')}

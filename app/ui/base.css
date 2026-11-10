@@ -14,6 +14,9 @@
   --text: #fff;
   --dim: #bab9be;
 }
+/* Colour (row B5): Padwake has none of its own. Black, white and neutral greys only; colour comes from game art (and
+   art-tint.js's wash from it), plus the trophy tiers' cups. One motion system: the row spring above, --ease-out fades,
+   transform and opacity only. One icon style: line glyphs with 2.6 px round strokes (settings/icons.js). */
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }

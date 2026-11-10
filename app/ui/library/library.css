@@ -68,7 +68,7 @@
 #screen-library .empty .sub { margin-top: 12px; font-size: 25px; line-height: 36px; color: #bdbdbd; }
 
 /* ---------- the sort button (fixed): Ø 72 at (51, 338); focused it turns white with a faint ring outside ---------- */
-#screen-library .sortbtn { position: absolute; left: 51px; top: 338px; width: 72px; height: 72px; border-radius: 50%; background: #07080f;
+#screen-library .sortbtn { position: absolute; left: 51px; top: 338px; width: 72px; height: 72px; border-radius: 50%; background: #0a0a0a;
   color: #fff; z-index: 3; }
 #screen-library .sortbtn svg { position: absolute; left: 18px; top: 20px; width: 35px; height: 34px; }
 #screen-library .sortbtn.focus { background: #fbfdfd; color: #0b0c10; box-shadow: 0 0 0 3px #000004, 0 0 0 6px rgba(255, 255, 255, .35); }
@@ -77,7 +77,7 @@
 #screen-library .dim { position: absolute; inset: 0; z-index: 2; background: rgba(0, 0, 0, .65); opacity: 0; pointer-events: none; }
 #screen-library.menu-open .dim { opacity: 1; }
 #screen-library .menu { display: none; position: absolute; left: 132px; top: 330px; width: 512px; height: 376px; z-index: 4;
-  background: linear-gradient(to top right, #1d1e23, #060a10); }
+  background: linear-gradient(to top right, #1f1f1f, #0b0b0b); }
 #screen-library.menu-open .menu { display: block; }
 #screen-library .menu .opt { position: absolute; left: 0; width: 512px; height: 72px; }
 #screen-library .menu .opt span { position: absolute; left: 91px; top: 21.6px; font-size: 31px; line-height: 31px; font-weight: 400; white-space: nowrap; }
@@ -85,7 +85,7 @@
 #screen-library .menu .opt.cur svg { visibility: visible; }
 /* the focused option: ring x +3…+508, 82 tall, with a faint diagonal light */
 #screen-library .menu .mring { position: absolute; left: 3px; top: 3px; width: 506px; height: 82px; border: 3px solid rgba(255, 255, 255, .8);
-  border-radius: 4px; pointer-events: none; background: linear-gradient(135deg, rgba(14, 18, 24, 0), rgba(83, 86, 99, .35)); }
+  border-radius: 4px; pointer-events: none; background: linear-gradient(135deg, rgba(19, 19, 19, 0), rgba(89, 89, 89, .35)); }
 
 /* ---------- the Journal tab (journal.js): totals at y 338, then 132 px rows from y 522 (pitch 156) ---------- */
 #screen-library.tab-journal .view, #screen-library.tab-journal .empty, #screen-library.tab-journal .bar,
@@ -109,7 +109,7 @@
 /* a row: square art, title (30 px) and the facts (22 px #bdbdbd) on the left; status, stars and progress on the right */
 #screen-library .jrow { position: absolute; left: 0; top: 0; width: 1576px; height: 132px; }
 #screen-library .jrow.focus { background: linear-gradient(90deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, .02)); }
-#screen-library .jart { position: absolute; left: 0; top: 0; width: 132px; height: 132px; overflow: hidden; border-radius: 2px; background: #15161b; }
+#screen-library .jart { position: absolute; left: 0; top: 0; width: 132px; height: 132px; overflow: hidden; border-radius: 2px; background: #171717; }
 #screen-library .jart img { display: block; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 200ms linear; }
 #screen-library .jart img.portrait { object-position: 50% 0; }
 #screen-library .jart img.in { opacity: 1; }
@@ -128,7 +128,7 @@
 #screen-library .jstatus { position: absolute; left: 980px; top: 48px; width: 230px; height: 36px; display: flex; align-items: center; gap: 12px;
   font-size: 22px; line-height: 36px; white-space: nowrap; }
 #screen-library .jstatus b { flex: none; width: 12px; height: 12px; border-radius: 50%; }
-#screen-library .jstatus.unset { color: #77767d; }
+#screen-library .jstatus.unset { color: #797979; }
 
 #screen-library .jstars { position: absolute; left: 1220px; top: 51px; display: flex; gap: 6px; }
 #screen-library .jstars .star svg { display: block; width: 100%; height: 100%; fill: rgba(255, 255, 255, .16); }
@@ -138,9 +138,8 @@
 #screen-library .jprog { position: absolute; left: 1420px; top: 48px; width: 156px; height: 36px; }
 #screen-library .jprog .track { position: absolute; left: 0; top: 16px; width: 76px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .16); overflow: hidden; }
 #screen-library .jprog .fill { height: 100%; background: #fff; }
-#screen-library .jprog.full .fill { background: #f2c75c; }
 #screen-library .jprog span { position: absolute; right: 0; top: 0; font-size: 22px; line-height: 36px; white-space: nowrap; }
-#screen-library .jprog.unset span { color: #77767d; }
+#screen-library .jprog.unset span { color: #797979; }
 #screen-library .jprog.unset .track { display: none; }
 
 /* the focus ring: 3 px, 3 px outside the row, as on a cover */
@@ -152,7 +151,7 @@
 #screen-library .jshelf { position: absolute; left: 172px; top: 522px; width: 1576px; height: 132px; overflow: hidden; }
 #screen-library .jstrip { position: absolute; left: 0; top: 0; height: 132px; will-change: transform; }
 #screen-library .jcard { position: absolute; left: 0; top: 0; width: 296px; height: 132px; border-radius: 2px; overflow: hidden;
-  background: linear-gradient(to bottom right, #0a0b10, #15191d); }
+  background: linear-gradient(to bottom right, #0c0c0c, #191919); }
 #screen-library .jcard img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 200ms linear; }
 #screen-library .jcard img.in { opacity: 1; }
 #screen-library .jcard .cshade { position: absolute; inset: 0;

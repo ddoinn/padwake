@@ -23,7 +23,7 @@ export function newlyEarned(before, after) {
 }
 
 export const tierName = t => t.tier[0].toUpperCase() + t.tier.slice(1);
-export const TIER_COLOR = { bronze: '#cd8f5e', silver: '#c9ccd6', gold: '#f2c75c' }; // as journal.css
+export const TIER_COLOR = { bronze: '#cd8f5e', silver: '#cecece', gold: '#f2c75c' }; // as journal.css
 
 // our own cup, in currentColor
 export const CUP = '<svg viewBox="0 0 32 32"><path fill="currentColor" d="M9 4h14v2h5v4a6 6 0 0 1-5.6 6A7 7 0 0 1 17 20.9V24h4a2 2 0 0 1 2 2v2H9v-2a2 2 0 0 1 2-2h4v-3.100A7 7 0 0 1 9.600 16 6 6 0 0 1 4 10V6h5Zm0 4H6v2a4 4 0 0 0 3 3.900Zm14 0v5.900A4 4 0 0 0 26 10V8Z"/></svg>';

@@ -58,19 +58,19 @@
 
 /* ---------- cards: 360×400 (x 84, bottom 889); the current one 432×520, left and bottom edges fixed (§1.6) ---------- */
 #screen-control-center .card {
-  position: absolute; bottom: 191px; border-radius: 12px; background: #15171c; overflow: hidden;
+  position: absolute; bottom: 191px; border-radius: 12px; background: #181818; overflow: hidden;
   outline: 3px solid transparent; outline-offset: 3px;
 }
 #screen-control-center .card.focus { outline-color: rgba(255, 255, 255, .6); }
 #screen-control-center .card .pic { position: absolute; left: 0; right: 0; top: 0; bottom: 118px; background: center / cover; border-radius: 12px 12px 0 0; }
-#screen-control-center .card .pic.plain { background: linear-gradient(140deg, #2b3140, #10131a); }
+#screen-control-center .card .pic.plain { background: linear-gradient(140deg, #343434, #141414); }
 #screen-control-center .card .badge {
-  position: absolute; left: 16px; top: 16px; width: 48px; height: 48px; border-radius: 10px; background: #2a2d35 center / cover;
+  position: absolute; left: 16px; top: 16px; width: 48px; height: 48px; border-radius: 10px; background: #2f2f2f center / cover;
   display: flex; align-items: center; justify-content: center; color: #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, .4);
 }
 #screen-control-center .card .badge svg { width: 30px; height: 30px; }
 #screen-control-center .card .kicker {
-  position: absolute; left: 22px; right: 22px; bottom: 64px; font-size: 22px; line-height: 30px; color: #a9abb2;
+  position: absolute; left: 22px; right: 22px; bottom: 64px; font-size: 22px; line-height: 30px; color: #adadad;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 #screen-control-center .card .title {
@@ -81,7 +81,7 @@
 /* ---------- panels (§1.7): above their icon, bottom at 880, a dark gradient, rows 96 px of 30 px text, the focused row
    outlined 2 px; header ≈24 px ---------- */
 #screen-control-center .panel {
-  bottom: 200px; display: none; border-radius: 12px; background: linear-gradient(135deg, #15191d, #090d13);
+  bottom: 200px; display: none; border-radius: 12px; background: linear-gradient(135deg, #191919, #0e0e0e);
   box-shadow: 0 16px 48px rgba(0, 0, 0, .55);
 }
 #screen-control-center .panel.on { display: block; }
@@ -96,11 +96,11 @@
 }
 #screen-control-center .row .l { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 #screen-control-center .row .v {
-  flex: none; max-width: 56%; font-size: 22px; line-height: 30px; color: #c8c9ce; white-space: nowrap; overflow: hidden;
+  flex: none; max-width: 56%; font-size: 22px; line-height: 30px; color: #cacaca; white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis; display: flex; align-items: center; gap: 16px;
 }
 #screen-control-center .row.focus { box-shadow: inset 0 0 0 2px #fff; background: rgba(255, 255, 255, .06); }
-#screen-control-center .row.text { height: 56px; font-size: 24px; line-height: 32px; color: #a9abb2; }
+#screen-control-center .row.text { height: 56px; font-size: 24px; line-height: 32px; color: #adadad; }
 /* slider: a thin light track ≈120 px ending ≈16 px from the panel's right edge, a white knob */
 #screen-control-center .row .track { position: relative; width: 120px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .3); }
 #screen-control-center .row .track i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px; background: #fff; }

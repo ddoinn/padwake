@@ -50,7 +50,7 @@ const PULSE = { period: 3300, flare: 1400, times: 4 };
 const SPARK_IN = [1700, 3000];
 const HANDOFF_MS = 1300; // from the prompt (3.3 s) to the video's end (4.6 s)
 
-const GLYPH = '<svg viewBox="0 0 64 64"><path fill="#16181f" d="M20 20h24c7.7 0 13 6.4 13.8 15.2l.9 9.6c.4 4.5-2.9 7.2-6.3 7.2-2.5 0-4.4-1.4-5.8-3.4L42.8 43H21.2l-3.8 5.6c-1.4 2-3.3 3.4-5.8 3.4-3.4 0-6.7-2.7-6.3-7.2l.9-9.6C7 26.4 12.3 20 20 20z"/><rect x="16.5" y="28" width="4" height="12" rx="1" fill="#fff"/><rect x="12.5" y="32" width="12" height="4" rx="1" fill="#fff"/><circle cx="44" cy="30" r="2.6" fill="#fff"/><circle cx="49.5" cy="35.5" r="2.6" fill="#fff"/><circle cx="38.5" cy="35.5" r="2.6" fill="#fff"/><circle cx="44" cy="41" r="2.6" fill="#fff"/></svg>';
+const GLYPH = '<svg viewBox="0 0 64 64"><path fill="#1a1a1a" d="M20 20h24c7.7 0 13 6.4 13.8 15.2l.9 9.6c.4 4.5-2.9 7.2-6.3 7.2-2.5 0-4.4-1.4-5.8-3.4L42.8 43H21.2l-3.8 5.6c-1.4 2-3.3 3.4-5.8 3.4-3.4 0-6.7-2.7-6.3-7.2l.9-9.6C7 26.4 12.3 20 20 20z"/><rect x="16.5" y="28" width="4" height="12" rx="1" fill="#fff"/><rect x="12.5" y="32" width="12" height="4" rx="1" fill="#fff"/><circle cx="44" cy="30" r="2.6" fill="#fff"/><circle cx="49.5" cy="35.5" r="2.6" fill="#fff"/><circle cx="38.5" cy="35.5" r="2.6" fill="#fff"/><circle cx="44" cy="41" r="2.6" fill="#fff"/></svg>';
 
 let app, host, root, video, prompt, glow, spark, spot;
 let phase = 'new';                        // new | boot | intro | prompt | pick | reveal | done

@@ -4,7 +4,7 @@
 
 /* Settings opens over Home, which stays drawn below it; the black base keeps the dropdown and dialog dims (the
    background fading to 32 % / 45 %) dimming to black instead of showing Home through. */
-#screen-settings { --ring-hi: rgba(226, 224, 234, .84); --ring-lo: rgba(226, 224, 234, .4); --val: #c7c7d5; --desc: #d8d4dc;
+#screen-settings { --ring-hi: rgba(228, 228, 228, .84); --ring-lo: rgba(228, 228, 228, .4); --val: #cccccc; --desc: #d8d8d8;
   font-weight: 300; overflow: hidden; background: #000; }
 
 /* ---------- §1.1 background: the shared spotlight (background/spotlight.js), alive as on the PS5; the dims fade it ---------- */
@@ -30,7 +30,7 @@
 #screen-settings .srow .value { position: absolute; right: var(--vr); top: calc(var(--capc) - 12.7px); max-width: 760px;
   font: 300 24px/1 'Open Sans', sans-serif; color: var(--val); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 1px; }
 #screen-settings .srow .glyph { position: absolute; right: calc(var(--vr) + 160px); top: calc(var(--capc) - 14px); height: 28px; display: flex; gap: 14px; }
-#screen-settings .srow .glyph svg { height: 28px; width: auto; fill: none; stroke: #c7c7d5; stroke-width: 2.2; }
+#screen-settings .srow .glyph svg { height: 28px; width: auto; fill: none; stroke: #cccccc; stroke-width: 2.2; }
 #screen-settings .srow .desc { position: absolute; left: calc(var(--tx) - 1px); right: var(--vr); top: 77.8px;
   font: 300 24px/34px 'Open Sans', sans-serif; color: var(--desc); opacity: 0; }
 #screen-settings .srow .desc.open { opacity: 1; }
@@ -40,8 +40,8 @@
 #screen-settings .srow .icon svg { width: 36px; height: 36px; display: block; }
 
 /* section header (§1.9): x 16 px left of labels, 24 px, ≈45 % white; its text centre 115 px below the block top */
-#screen-settings .srow.k-header .label { left: var(--hx); top: calc(115px - 12.7px); font-size: 24px; color: #716e76; }
-#screen-settings .slist.info .srow.k-header .label { color: #d0ccd4; }
+#screen-settings .srow.k-header .label { left: var(--hx); top: calc(115px - 12.7px); font-size: 24px; color: #727272; }
+#screen-settings .slist.info .srow.k-header .label { color: #d0d0d0; }
 
 /* disabled (§1.9): label ≈46 %, value ≈22 %, description ≈35 %, toggle ≈30 % */
 #screen-settings .srow.disabled .label { color: rgba(255, 255, 255, .46); }
@@ -51,20 +51,20 @@
 /* toggle (§1.10): 64×32 track, 26 px knob inset 3 px. Off (part 2, t0640.50): an outlined knob on the left. */
 #screen-settings .tog { position: absolute; right: var(--vr); top: calc(var(--capc) - 16px); width: 64px; height: 32px; border-radius: 16px;
   background: rgba(255, 255, 255, .15); transition: background-color 150ms var(--ease-out); }
-#screen-settings .tog i { position: absolute; left: 3px; top: 3px; width: 26px; height: 26px; border-radius: 50%; border: 2px solid #a3a2ad;
+#screen-settings .tog i { position: absolute; left: 3px; top: 3px; width: 26px; height: 26px; border-radius: 50%; border: 2px solid #a6a6a6;
   transition: transform 150ms var(--ease-out), background-color 150ms, border-color 150ms; }
 #screen-settings .tog.on { background: rgba(255, 255, 255, .26); }
 #screen-settings .tog.on i { transform: translateX(32px); background: #dcdbe0; border-color: #dcdbe0; }
 #screen-settings .srow.disabled .tog { background: rgba(255, 255, 255, .06); }
-#screen-settings .srow.disabled .tog i { border-color: #3f3f4b; }
-#screen-settings .srow.disabled .tog.on i { background: #3f3f4b; }
+#screen-settings .srow.disabled .tog i { border-color: #434343; }
+#screen-settings .srow.disabled .tog.on i { background: #434343; }
 
-/* slider (§1.10): 240×4 track ending on the value edge, filled #AAAAB8, 16 px knob */
+/* slider (§1.10): 240×4 track ending on the value edge, filled #afafaf, 16 px knob */
 #screen-settings .sld { position: absolute; right: calc(var(--vr) - 1px); top: calc(var(--capc) - 2px); width: 240px; height: 4px;
   border-radius: 2px; background: rgba(255, 255, 255, .07); --p: 0%; }
-#screen-settings .sld b { position: absolute; left: 0; top: 0; height: 4px; width: var(--p); border-radius: 2px; background: #aaaab8; }
-#screen-settings .sld i { position: absolute; left: calc(var(--p) - 8px); top: -6px; width: 16px; height: 16px; border-radius: 50%; background: #d8d8de; }
-#screen-settings .srow.disabled .sld i { background: #444450; }
+#screen-settings .sld b { position: absolute; left: 0; top: 0; height: 4px; width: var(--p); border-radius: 2px; background: #afafaf; }
+#screen-settings .sld i { position: absolute; left: calc(var(--p) - 8px); top: -6px; width: 16px; height: 16px; border-radius: 50%; background: #dadada; }
+#screen-settings .srow.disabled .sld i { background: #484848; }
 #screen-settings .srow.disabled .sld b { background: rgba(255, 255, 255, .1); }
 
 /* the focus light (§1.7): a 3 px frame, brighter on the edge it arrived from the direction of travel, no fill */
@@ -76,7 +76,7 @@
   mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); }
 #screen-settings .sring.dn { --rt: var(--ring-lo); --rb: var(--ring-hi); }
 #screen-settings .sring.up { --rt: var(--ring-hi); --rb: var(--ring-lo); }
-#screen-settings .sglow { background: rgb(232, 238, 255); }
+#screen-settings .sglow { background: rgb(242, 242, 242); }
 /* the streak (§1.7): sharp leading edge, ≈45 px soft tail, brightest in the left third */
 #screen-settings .streak { position: absolute; left: 3px; right: 3px; height: 45px; pointer-events: none; opacity: 0;
   -webkit-mask-image: linear-gradient(to right, transparent, #000 18%, #000 36%, rgba(0, 0, 0, .55) 70%, transparent);
@@ -93,14 +93,14 @@
 
 /* ---------- dim behind a popup (§1.12): page text 60 %, background 32 %, the owner row stays ---------- */
 #screen-settings.dim .stitle, #screen-settings.dim .srow:not(.owner), #screen-settings.dim .sbar { opacity: .6; transition-duration: 150ms; transition-delay: 33ms; }
-#screen-settings.dim .srow.owner .desc { color: #c8c4cc; }
+#screen-settings.dim .srow.owner .desc { color: #c8c8c8; }
 #screen-settings.dlg .spage { opacity: 0; transition: opacity 150ms var(--ease-out); }
 #screen-settings .spage { transition: opacity 183ms var(--ease-out); }
 
 /* ---------- dropdown (§1.10): opens in place, the checked option on its row ---------- */
 #screen-settings .dd { position: absolute; z-index: 20; }
 #screen-settings .dd-panel { position: absolute; inset: 0;
-  background: linear-gradient(to bottom, rgba(0, 0, 0, .3), rgba(255, 255, 255, .025)), linear-gradient(to right, #16191e, #121419 55%, #08080c); }
+  background: linear-gradient(to bottom, rgba(0, 0, 0, .3), rgba(255, 255, 255, .025)), linear-gradient(to right, #1a1a1a, #151515 55%, #08080c); }
 #screen-settings .dd-opts { position: absolute; inset: 0; overflow: hidden; }
 #screen-settings .dd-opt { position: absolute; left: 0; right: 0; height: 72px; }
 #screen-settings .dd-opt span { position: absolute; left: 78px; top: calc(36px - 16.5px); font: 300 31px/1 'Open Sans', sans-serif; color: #fff; white-space: nowrap; }
@@ -108,12 +108,12 @@
 #screen-settings .dd-ring { position: absolute; left: 2px; right: 2px; height: 83px; top: 0; opacity: 0; border-radius: 4px; }
 #screen-settings .dd-ring::before { content: ''; position: absolute; inset: 0; border-radius: 4px; padding: 3px; background: var(--ring-hi);
   -webkit-mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); }
-#screen-settings .dd-ring i { position: absolute; inset: 3px; background: rgb(232, 238, 255); opacity: 0; }
+#screen-settings .dd-ring i { position: absolute; inset: 3px; background: rgb(242, 242, 242); opacity: 0; }
 
 /* ---------- dialogs: centred title, text and pills (§1.10 buttons, 4-settings-b §2.4) ---------- */
 #screen-settings .sdlg { position: absolute; inset: 0; z-index: 30; }
 #screen-settings .sdlg h2 { position: absolute; left: 160px; right: 160px; top: 330px; text-align: center; font: 300 46px/1.15 'Open Sans', sans-serif; }
-#screen-settings .sdlg p { position: absolute; left: 360px; right: 360px; top: 420px; text-align: center; font: 300 31px/42px 'Open Sans', sans-serif; color: #d8d4dc; }
+#screen-settings .sdlg p { position: absolute; left: 360px; right: 360px; top: 420px; text-align: center; font: 300 31px/42px 'Open Sans', sans-serif; color: #d8d8d8; }
 #screen-settings .sdlg .btns { position: absolute; left: 0; right: 0; top: 586px; display: flex; justify-content: center; gap: 40px; }
 /* a code to type on another device (GitHub sign-in): large, spaced, on a soft plate */
 #screen-settings .sdlg.with-code h2 { top: 250px; }
@@ -128,7 +128,7 @@
 #screen-settings .sdlg.tall h2 { top: 220px; }
 #screen-settings .sdlg.tall p { top: 310px; }
 #screen-settings .sdlg.tall .btns { top: 670px; }
-#screen-settings .pill { position: relative; width: 388px; height: 72px; border-radius: 36px; background: #181826; color: #fff;
+#screen-settings .pill { position: relative; width: 388px; height: 72px; border-radius: 36px; background: #1d1d1d; color: #fff;
   font: 700 30px/72px 'Open Sans', sans-serif; text-align: center; transition: background-color 150ms var(--ease-out), color 150ms var(--ease-out); }
 #screen-settings .pill.focus { background: #fdfdfd; color: #090909; }
 #screen-settings .pill.focus::after { content: ''; position: absolute; inset: -7px; border-radius: 43px; border: 3px solid rgba(255, 255, 255, .8); }
@@ -140,26 +140,26 @@
 #screen-settings .pad-test { position: absolute; inset: 0; color: #fff; }
 #screen-settings .pad-intro { position: absolute; left: 98px; top: 158px; margin: 0; font: 300 26px/38px 'Open Sans', sans-serif; color: var(--val); }
 #screen-settings .pad-drawing { position: absolute; left: 142px; top: 235px; width: 1050px; height: 714px; }
-#screen-settings .pad-body { fill: url(#pad-shell); stroke: #898994; stroke-width: 2; }
+#screen-settings .pad-body { fill: url(#pad-shell); stroke: #8d8d8d; stroke-width: 2; }
 #screen-settings .pad-seam { fill: none; stroke: #ffffff20; stroke-width: 2; }
-#screen-settings .pad-well { fill: #13151e; stroke: #777783; stroke-width: 2; }
+#screen-settings .pad-well { fill: #171717; stroke: #7b7b7b; stroke-width: 2; }
 #screen-settings .pad-axis { fill: none; stroke: #ffffff20; stroke-width: 1; }
-#screen-settings .pad-surface { fill: #343640; stroke: #a3a3b0; stroke-width: 2; }
+#screen-settings .pad-surface { fill: #393939; stroke: #a7a7a7; stroke-width: 2; }
 #screen-settings .pad-thumb { fill: none; stroke: #ffffff20; stroke-width: 1.5; }
-#screen-settings .pad-drawing text { font: 400 24px 'Open Sans', sans-serif; fill: #efedf3; text-anchor: middle; dominant-baseline: central; }
-#screen-settings .pad-symbol { fill: none; stroke: #efedf3; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
-#screen-settings .pad-dpad-centre { fill: #6b6d78; }
-#screen-settings .pad-drawing .pad-caption { font-size: 17px; font-weight: 300; fill: #c7c7d5; }
+#screen-settings .pad-drawing text { font: 400 24px 'Open Sans', sans-serif; fill: #f0f0f0; text-anchor: middle; dominant-baseline: central; }
+#screen-settings .pad-symbol { fill: none; stroke: #f0f0f0; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+#screen-settings .pad-dpad-centre { fill: #707070; }
+#screen-settings .pad-drawing .pad-caption { font-size: 17px; font-weight: 300; fill: #cccccc; }
 /* No transition on input: a press and release are visible on the first available frame. */
 #screen-settings .pad-key.on .pad-surface { fill: #fff; stroke: #fff; }
-#screen-settings .pad-key.on text { fill: #161720; }
-#screen-settings .pad-key.on .pad-symbol { stroke: #161720; }
-#screen-settings .pad-key.on .pad-thumb { stroke: #656570; }
+#screen-settings .pad-key.on text { fill: #1a1a1a; }
+#screen-settings .pad-key.on .pad-symbol { stroke: #1a1a1a; }
+#screen-settings .pad-key.on .pad-thumb { stroke: #696969; }
 #screen-settings .pad-readings { position: absolute; left: 1290px; top: 260px; width: 444px; border-left: 1px solid #ffffff25; padding-left: 46px; }
 #screen-settings .pad-readings h2 { margin: 0 0 26px; font: 300 31px/42px 'Open Sans', sans-serif; }
 #screen-settings .pad-reading { padding: 20px 0; border-top: 1px solid #ffffff20; }
 #screen-settings .pad-reading h3 { margin: 0 0 10px; font: 300 24px/32px 'Open Sans', sans-serif; color: var(--val); }
-#screen-settings .pad-reading h3 span { float: right; font-size: 20px; color: #aaa7b4; }
+#screen-settings .pad-reading h3 span { float: right; font-size: 20px; color: #acacac; }
 #screen-settings .pad-reading p { margin: 0; min-height: 38px; font: 400 25px/38px 'Open Sans', sans-serif; font-variant-numeric: tabular-nums; white-space: pre; }
 #screen-settings .pad-pressed { height: 128px; }
 #screen-settings .pad-pressed p { font-weight: 300; color: var(--val); white-space: normal; overflow-wrap: anywhere; max-height: 76px; overflow-y: auto; }
@@ -167,7 +167,7 @@
 #screen-settings .pad-triggers p { display: flex; gap: 36px; font-size: 22px; }
 #screen-settings .pad-triggers b { margin-left: 8px; font-weight: 300; color: var(--val); }
 #screen-settings .pad-triggers .on b { color: #fff; font-weight: 400; }
-#screen-settings .pad-help { margin: 8px 0 0; font: 300 20px/32px 'Open Sans', sans-serif; color: #aaa7b4; }
+#screen-settings .pad-help { margin: 8px 0 0; font: 300 20px/32px 'Open Sans', sans-serif; color: #acacac; }
 #screen-settings .pad-footer { position: absolute; left: 98px; right: 186px; top: 982px; display: flex; align-items: center; justify-content: space-between; font: 300 24px/34px 'Open Sans', sans-serif; }
 #screen-settings .pad-back { display: flex; align-items: center; gap: 18px; }
 #screen-settings .pad-back small { margin-left: 12px; font-size: 20px; color: var(--val); }
@@ -182,7 +182,7 @@
 #screen-settings .avgrid { position: absolute; inset: 0; overflow: hidden; clip-path: inset(150px 0 0 0); }
 #screen-settings .avscroll { position: absolute; inset: 0; transition: transform 200ms var(--ease-out); }
 #screen-settings .avhead { position: absolute; left: 290px; font-size: 26px; line-height: 36px; color: var(--dim); }
-#screen-settings .avnote { position: absolute; left: 290px; right: 290px; font-size: 21px; line-height: 28px; color: #8f8c96; }
+#screen-settings .avnote { position: absolute; left: 290px; right: 290px; font-size: 21px; line-height: 28px; color: #909090; }
 #screen-settings .avtool { border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, .1); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .25); }
 /* Users (users.js): rows with a 44 px avatar before the name, as the PS5's Users list */
 #screen-settings .spage.users .srow .icon { left: 22px; top: calc(var(--capc) - 22px); width: 44px; height: 44px; }

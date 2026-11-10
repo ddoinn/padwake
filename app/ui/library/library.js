@@ -30,6 +30,7 @@ import * as journal from './journal.js';
 import * as lists from './lists.js';
 import * as keyboard from '../keyboard/keyboard.js';
 import { mount as spotlight } from '../background/spotlight.js'; // the moving spotlight, as Search and Settings
+import { tint } from '../journal/shared.js'; // the grey placeholder for a game without art, as everywhere
 
 const FRAME = 1000 / 60;
 const COLS = 5, PITCH = 320, X0 = 172, Y0 = 338;  // covers are 296 px (library.css)
@@ -328,13 +329,6 @@ function cover(i) {
   el.append(Object.assign(document.createElement('div'), { className: 'shade' }));
   $.grid.append(el);
   return el;
-}
-
-// a stable colour per entry without art (as Home's tiles)
-function tint(id) {
-  let h = 0;
-  for (const c of id) h = (h * 31 + c.codePointAt(0)) % 360;
-  return `linear-gradient(145deg, hsl(${h} 45% 34%), hsl(${(h + 25) % 360} 50% 16%))`;
 }
 
 function gridAction(name, e) {

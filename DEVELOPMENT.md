@@ -25,7 +25,7 @@ From the repository root:
 node tools/app/ui-probe.mjs --query "scene=settings&settings=controllers/0/r/1" tools/app/checks/controller-test.json
 node tools/app/ui-probe.mjs --query scene=home tools/app/checks/settings-dim-over-home.json
 node tools/app/ui-probe.mjs --query scene=home tools/app/checks/cloud.json
-node tools/app/ui-probe.mjs --query "scene=home&captures=9" tools/app/checks/gallery.json
+node tools/app/ui-probe.mjs --query scene=home tools/app/checks/gallery.json
 node tools/app/ui-probe.mjs --query scene=home tools/app/checks/journal.json
 node tools/app/ui-probe.mjs --query "" tools/app/checks/update-toast.json
 node tools/app/ui-probe.mjs --query "" tools/app/checks/start-cloud.json
@@ -39,6 +39,7 @@ node tools/app/ui-probe.mjs --query scene=home tools/app/checks/display-profile.
 node tools/app/ui-probe.mjs --query "scene=home&users=3" tools/app/checks/lists.json
 node tools/app/ui-probe.mjs --query "scene=home&users=3&today=2026-11-10T20:00" tools/app/checks/recap.json
 node tools/app/ui-probe.mjs --query "today=2026-11-10T20:00" tools/app/checks/recap-notice.json
+node tools/app/ui-probe.mjs --query scene=home tools/app/checks/art-tint.json
 ```
 
 The UI probe uses headless Edge and mock host data. Set EDGE to your Edge executable; its default path and the capture/input tools target the Windows development laptop.

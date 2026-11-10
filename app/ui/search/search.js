@@ -13,6 +13,7 @@
 import * as keyboard from '../keyboard/keyboard.js';
 import { sorted } from '../library/library.js'; // "Recently played" in the same order as Home and the Library
 import { mount as spotlight } from '../background/spotlight.js'; // the moving spotlight (3-settings-a.md §1.1)
+import { tint } from '../journal/shared.js'; // the grey placeholder for a game without art, as everywhere
 
 const COLS = 7, PITCH = 224, X0 = 172, Y0 = 300, ROWS = 3;  // results are 200 px (search.css)
 const TYPING = { cols: 3, x: 1100, y: 272, max: 9 };       // while typing: right of the keyboard panel (x 172–1042)
@@ -214,12 +215,6 @@ function cover(g, i) {
   el.insertAdjacentHTML('beforeend', '<div class="shade"></div><div class="title"></div>');
   el.querySelector('.title').textContent = g.name;
   return el;
-}
-
-function tint(id) {
-  let h = 0;
-  for (const c of id) h = (h * 31 + c.codePointAt(0)) % 360;
-  return `linear-gradient(145deg, hsl(${h} 45% 34%), hsl(${(h + 25) % 360} 50% 16%))`;
 }
 
 // the Library's focus: the ring 3 px outside the cover fades in after 140 ms; the title shows at once

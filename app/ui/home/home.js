@@ -29,6 +29,7 @@ import { sorted, SORTS, STORES } from '../library/library.js'; // the preview sh
 import { avatarHtml } from '../users/avatars.js';
 import * as users from '../users/store.js';
 import * as keyboard from '../keyboard/keyboard.js';
+import { artWash, NEUTRAL_WASH } from '../art-tint.js';
 
 const BIG = 168, SMALL = 106, SCALE = SMALL / BIG;
 const FOCUS_X = 172, PREV_X = 50, NEXT_X = 356, PITCH = 114;
@@ -109,7 +110,7 @@ export default {
     root = el;
     el.innerHTML = `
       <div class="bgwrap"><div class="bg"><div class="layer"></div><div class="layer"></div></div><div class="scrim"></div><div class="dim"></div></div>
-      <div class="navy"><div class="lglow"></div><img class="lart" alt=""><div class="lscrim"></div>
+      <div class="navy"><img class="lart" alt=""><div class="lscrim"></div>
         <div class="lmark"><img class="llogo" alt=""><div class="lname"></div><div class="lmeta"></div></div>
         <div class="lstatus"><svg viewBox="0 0 40 40"><circle class="ltrack" cx="20" cy="20" r="16"/><circle class="larc" cx="20" cy="20" r="16"/></svg><span>Loading</span></div>
         <div class="lhint">Taking a while? Press Guide to close it.</div></div>
@@ -267,11 +268,12 @@ function playLabel(it) {
   $.play.querySelector('span').textContent = it?.kind === 'media' ? 'Open' : it?.kind === 'game' && it.id === running ? 'Resume' : 'Play';
 }
 
-// a stable colour per entry when it has no art
+// the placeholder for an entry without art: charcoal, a shade lighter or darker per entry so a row of them isn't one
+// flat sheet. Grey, never a made-up hue: Padwake's colour comes only from game art (row B5).
 function tint(id, light, dark, angle) {
   let h = 0;
   for (const c of id) h = (h * 31 + c.codePointAt(0)) % 360;
-  return `linear-gradient(${angle}deg, hsl(${h} 45% ${light}%), hsl(${(h + 25) % 360} 50% ${dark}%))`;
+  return `linear-gradient(${angle}deg, hsl(0 0% ${light - 10 + (h % 5)}%), hsl(0 0% ${dark - 4}%))`;
 }
 
 // the tinted placeholder with the name, for an entry without art or whose art file is missing
@@ -651,6 +653,8 @@ function ago(t) {
 }
 const startOfDay = ms => { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); };
 
+// the tile, for the wash behind an entry with no background art
+const tileSource = it => (it?.kind === 'game' && it.g?.art?.tile ? host.fileUrl(it.g.art.tile) : null);
 function bgSource(it) {
   if ((it?.kind === 'game' || it?.kind === 'media') && it.g?.art?.background) return host.fileUrl(it.g.art.background);
   return null;
@@ -671,7 +675,7 @@ function decode(src, cors = false) {
 function artReady(it) {
   if (it?.kind === 'library') return previewReady();
   const logo = it?.kind === 'game' && it.g.art?.logo ? host.fileUrl(it.g.art.logo) : null;
-  return Promise.all([bgSource(it) && decode(bgSource(it)), logo && logoBox(logo)]);
+  return Promise.all([bgSource(it) && decode(bgSource(it)), logo && logoBox(logo), !bgSource(it) && artWash(tileSource(it))]);
 }
 
 // Logos often come with wide transparent margins. Their ink box, found once on a small copy, crops them
@@ -701,10 +705,14 @@ function logoBox(src) {
 function paintLayer(layer, it) {
   const src = bgSource(it);
   layer.replaceChildren();
+  // no background art: a dark wash in the tile's colour (art-tint.js), else grey. artReady waited for the wash, so it is
+  // read in a microtask, before the cross-fade's first frame.
   const tinted = () => {
-    layer.style.background = it && it.kind !== 'library'
-      ? tint(it.id, 15, 3, 110).replace('linear-gradient(110deg,', 'radial-gradient(ellipse at 78% 40%,') : '#000';
+    layer.style.background = it && it.kind !== 'library' ? NEUTRAL_WASH : '#000';
+    const tile = it && it.kind !== 'library' ? tileSource(it) : null;
+    if (tile) artWash(tile).then(w => { if (w && layer.dataset.item === it.id) layer.style.background = w; });
   };
+  layer.dataset.item = it?.id ?? '';
   if (src) {
     layer.style.background = '#000';
     const img = Object.assign(document.createElement('img'), { src, alt: '', decoding: 'sync' });
@@ -1676,7 +1684,8 @@ function launch(g, from) {
 
 // The launch screen while the game loads: Home's background art stays and slowly pushes in as the UI melts away, the
 // logo (or name) and the player's history rise in at Home's hero column, and a spinner comes at the lower right if the
-// game takes more than a moment (home.css). Without art it is the navy with a glow. `.loading` runs those animations;
+// game takes more than a moment (home.css). Without background art it is Home's wash in the tile's colour, or grey
+// (art-tint.js); the element keeps its old class, .navy. `.loading` runs those animations;
 // `loadingDone` takes it off, so nothing animates once the app sleeps or comes back.
 function loadingScreen(g) {
   const navy = $.navy;
@@ -1688,6 +1697,9 @@ function loadingScreen(g) {
     } else img.removeAttribute('src');
   };
   show(navy.querySelector('.lart'), g.art?.background ? host.fileUrl(g.art.background) : null, 'hasart');
+  navy.style.background = '';
+  const tile = !g.art?.background && g.art?.tile ? host.fileUrl(g.art.tile) : null;
+  if (tile) artWash(tile).then(w => { if (w && navy.querySelector('.lname').textContent === g.name) navy.style.background = w; });
   show(navy.querySelector('.llogo'), g.art?.logo ? host.fileUrl(g.art.logo) : null, 'haslogo');
   navy.querySelector('.lname').textContent = g.name;
   navy.querySelector('.lmeta').textContent = [g.playtimeSec && playtime(g.playtimeSec),
