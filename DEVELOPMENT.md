@@ -28,6 +28,7 @@ node tools/app/ui-probe.mjs --query scene=home tools/app/checks/cloud.json
 node tools/app/ui-probe.mjs --query scene=home tools/app/checks/gallery.json
 node tools/app/ui-probe.mjs --query scene=home tools/app/checks/journal.json
 node tools/app/ui-probe.mjs --query "" tools/app/checks/update-toast.json
+node tools/app/ui-probe.mjs --query updated=1 tools/app/checks/updated-toast.json
 node tools/app/ui-probe.mjs --query "" tools/app/checks/start-cloud.json
 node tools/app/ui-probe.mjs --query "scene=home&gameMs=0" tools/app/checks/launch-screen.json
 node tools/app/ui-probe.mjs --query "scene=home&gameMs=0" tools/app/checks/session-recap.json

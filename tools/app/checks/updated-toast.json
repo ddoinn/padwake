@@ -1,0 +1,9 @@
+[
+  {"wait": 2500},
+  {"assert": "__app.top.id === 'start'", "why": "the first start after an update shows the start screen"},
+  {"assert": "import('./control-center/toast.js').then(m => !m.toastLog.some(t => /^Updated to/.test(t.message)))", "why": "\"Updated to\" waits: nothing is told under the start screen (it used to play 1.5 s in, unseen)"},
+  {"key": "Enter"}, {"wait": 700}, {"key": "Enter"}, {"wait": 3000},
+  {"assert": "__app.top.id === 'home'", "why": "a button reveals Home"},
+  {"assert": "import('./control-center/toast.js').then(m => m.toastLog.filter(t => t.message === 'Updated to version 0.1.0.').length === 1)", "why": "the first Home tells the update, once"},
+  {"shot": "updated-toast-on-home"}
+]
