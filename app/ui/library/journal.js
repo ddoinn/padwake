@@ -154,7 +154,7 @@ function shelfAction(name, e) {
   if (name === 'left') return card > 0 ? toCard(card - 1) : !e.held && ctx.toButton();
   if (name === 'right') return card < cards.length - 1 && toCard(card + 1);
   if (e.held) return false;
-  if (name === 'wheel') return e.dy > 0 ? (onShelf = false, move(0)) : 'none';
+  if (name === 'wheel') return e.dy > 0 ? move(0) || 'none' : 'none';
   if (name === 'a') return openRecap(card);
   return false;
 }
