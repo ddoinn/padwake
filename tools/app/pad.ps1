@@ -4,6 +4,8 @@
 #   guide tap | guide hold            Guide down for 120 ms / 800 ms
 #   press <button> [ms]               a b x y lb rb lt rt menu view guide up down left right l3 r3 (default 80 ms)
 #   pad {"rx":0.6,"a":true}           hold a state until the next pad command (sticks -1..1, y down); pad {} lets go
+#   report ds5 usb <hex>              one raw PlayStation (ds4, ds5) or Switch (pro) HID report, usb or bt, through the
+#                                     app's HID parser as a PlayStation or Switch pad; report off takes it away
 # Like an injected key, each command first waits for the key guard (no person for 60 s); -NoGuard skips that.
 #   pad.ps1 'guide tap'
 #   pad.ps1 'press right' 'press right' 'press a'
